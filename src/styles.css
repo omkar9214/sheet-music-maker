@@ -1,0 +1,11 @@
+/* Placeholder until a design is chosen with the first feature (AGENTS.md §0). Tokens first, before
+   any component — retrofitting them is the design job that never gets done (guitar-app-template). */
+:root {
+  --bg: #fbfaf7;
+  --ink: #1d1b18;
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); }
+.shell { padding: 32px; }
+.shell h1 { margin: 0; font-size: 20px; font-weight: 600; }
