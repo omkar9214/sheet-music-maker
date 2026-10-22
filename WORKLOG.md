@@ -67,3 +67,72 @@ EXIT=0 — verify-repo 5 checks passed, 4 tests in 1 file, tsc -b clean
 
 **Open:** §0, and with it everything that is a feature. §5 unruled. No notation library chosen
 (`NEXT.md` 1). No remote.
+
+---
+
+## 2026-10-22 — Claude — decision 2: the brief — a fast band chart maker (chords, cues, structure, transpose)
+
+**Type:** decision
+**Files:** `AGENTS.md` §0, `docs/reference/Khwabon ke Parindey.pdf`
+**Did:** Omkar, verbatim, attaching `Khwabon ke Parindey.pdf`:
+
+> *"Study the attached PDF. I want you to make a sheet music maker app, which the purpose of which is to write down the structure, write down the cues and the chords for a song and key information as well. The chords should come from some kind of menu or something, like you find an elegant way of doing it. I'm leaving that up to you. So I need that feature because I need to be able to transpose the song. So if the key of the song is in F sharp, if I change the key from F sharp to A, everything should be transposed to A. And there are going to be a lot of cues in the song, so you need to find an elegant way to write down the cues. So if I write something, there's already text boxes wherever the space is, and the rhythm is notated. So if you study the chart, it should look exactly like a traditional chart. There should be repeat signs, there should be like 1, 2, 3, 4 endings, maybe coda. So everything should be there. But and the chart that I've sent you is created in MuseScore, but MuseScore is very complicated for me and it's like very sluggish and slow for me. So I need a quick, very quick solution to write all of this down. So the rhythm should be, I'm not dealing with individual notes, although we can like on the second pass add individual note features as well. So it's a very quick, very simple, elegant sheet music maker where you can like quickly within 10 minutes create a sheet. So this is what you have to work with for now. If you have any questions, you can ask me."*
+
+Earlier the same session: *"you have the project?"* (a question, answered).
+
+**What the PDF is (measured, `pdfinfo` + rendered pages):** MuseScore Studio 4.7.5, 3 letter pages,
+73 bars. Title "Khwabon ke Parindey", source "ZNMD" top right. Treble 8vb, B major (5♯), 4/4, ♩=90.
+Section labels ("Intro:", "Chorus:", "Verse 1:" …, 10 sections) above the system's left edge; bar
+number at each system start; mostly 4 bars a system, some 2. Boxed text above the staff ("Vocal 1
+Enters", "Harmony on “Oho”") and plain text below it ("Band Enters - Vocal 1, Shakers, Bass, Ele
+Guitar Strums"). Chord symbols C♯min11, D♯m+, G♯m7♯9, F♯7sus2, Emaj9; one or two per bar. Rhythm
+is slashes in three kinds: a recurring strum (eighths and 16th rests, beamed); half-note slashes
+(one per chord); and a "Choke" ending bar. Repeats on four sections, the last marked "4x". No
+voltas or coda in this chart, but he asked for them.
+
+**Inference, marked as inference:**
+- His "F sharp → A" was an example. The chart is in B. Transposing respells every chord into the new
+  key (non-negotiable 2), and the key signature moves with it.
+- "Rhythm is notated" = slash notation with reusable bar patterns, as in the PDF. Not notes.
+- "Text boxes wherever the space is" = every bar has an above-staff and a below-staff cue slot,
+  ready to type into.
+- Output on screen plus print/PDF. No playback.
+- Standalone in this repo (Vite), until he says learnMusicIn.
+
+**Why:** His instruction. It fills §0.
+
+**Open:** Asked in the same session: where it ships, the chord menu's shape, the rhythm entry and
+the output format. Answers go in the next decision.
+
+---
+
+## 2026-10-22 — Claude — decision 3: chords typed + palette, pattern stamps, standalone, print/PDF
+
+**Type:** decision
+**Files:** `AGENTS.md` §0 (items 2, 3, 7 re-marked)
+**Did:** Omkar first rejected the question prompt, which stopped the turn, and then said, verbatim:
+
+> *"im back"*
+
+The same four questions were put again. He picked the recommended option on every one. These are
+his answers as recorded by the question tool:
+
+> *"How should chords be entered?"="Type + palette (Recommended)", "How should the rhythm be set for each bar?"="Pattern stamps (Recommended)", "Where does this ship?"="Standalone (Recommended)", "What do you hand the band?"="Print / PDF (Recommended)"*
+
+- **Chords:** click a bar and type (e.g. `c#m11`), or click from a palette. The palette shows the
+  key's diatonic chords, the chord qualities and the chords used recently. Each chord is stored
+  relative to the key, so transposing is exact.
+- **Rhythm:** a few named patterns per song (his strum, half-note slashes, four slashes, choke).
+  One pattern is set per section, and single bars can be overridden.
+- **Ships:** standalone, in this repo. It can be vendored into learnMusicIn later.
+- **Output:** print/PDF in letter-size pages like the MuseScore chart. No MusicXML.
+
+**Inference, marked as inference:** The first rejection was him stepping away, not a no. He came
+back and answered the same questions. Picking the recommendation does not make the rest of the
+option text a ruling: "letter-size", the palette's three rows and the four starter patterns are my
+wording.
+
+**Why:** His instruction.
+
+**Open:** Look and feel beyond "exactly like a traditional chart". Notation font. Whether one chart
+or many are kept (a song list).

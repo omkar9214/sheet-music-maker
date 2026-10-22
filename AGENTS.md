@@ -10,45 +10,61 @@ guitar apps; **their rules did.** §1–§4, §7 and §9 are the Guitar Techniqu
 Interval trainer's and the chord-tone trainer's before it), carried word for word, because they were
 paid for in real defects and a rule reworded loses the evidence that makes it stick. Where one of
 them names a guitar-app file or exercise, that is the evidence, not a claim about this repo. §0, §5
-and §6 are about *this* product, and §0 is not filled in yet.
+and §6 are about *this* product, and §0 is written (decisions 2–3).
 
 ---
 
-## 0. The brief — fill this in before writing any feature
+## 0. The brief
 
-**NOT YET WRITTEN. Omkar has said "a sheet music maker app" and nothing more.**
+**Written 2026-10-22 from Omkar's brief, `WORKLOG.md` decision 2.** **[R]** marks his ruling, and
+**[I]** marks inference he has not confirmed yet. The reference artifact is his MuseScore chart
+*Khwabon ke Parindey* (3 pages, 73 bars), and a copy lives at `docs/reference/`. **"It should look
+exactly like a traditional chart"** means it should look like that PDF.
 
-"Sheet music maker" covers at least five different products — a notation editor (MuseScore), a tab
-editor (Guitar Pro), a lead-sheet / chord-chart maker, a transcriber (audio → notes), a
-practice-sheet generator. Each has a different first screen, a different data model and a different
-definition of done. Guessing one produces a settings screen with a staff on it.
+1. **Who and what for.** A band chart: the song's structure, its cues, its chords and its key
+   information **[R]**, written by Omkar for the musicians playing it **[I]**. It is fast: **a whole
+   sheet in about 10 minutes [R]**. MuseScore was "very complicated … very sluggish and slow" for
+   this job **[R]**.
+2. **What goes in.**
+   - Chords come from a menu, or something more elegant. The design is left to us **[R]**.
+     **Typed with a palette [R, decision 3]**: type `c#m11`, or click from the key's diatonic
+     chords, the qualities and the chords used recently.
+   - Cues are many, so the way to write them has to be elegant **[R]**. They go in text boxes that
+     are already there wherever there is space **[R]**.
+   - Rhythm is notated, but not note by note **[R]**: it is slash rhythm, as in the reference.
+     **Pattern stamps [R, decision 3]**: a few named patterns per song, one set per section,
+     overridden per bar.
+   - Individual notes may come "on the second pass" **[R]**, and that is not MVP.
+3. **What comes out.** A traditional chart drawn on screen **[R]**:
+   - title and source line, tempo, time signature, key signature
+   - section labels and bar numbers
+   - boxed cues above the staff and plain cues below it
+   - chord symbols and slash rhythm
+   - repeat signs, 1st–4th endings, coda, and "N×" counts **[R]**
 
-Write, before any feature code:
-
-1. **Who makes the sheet, and what for**, in a sentence. Himself for gigs? Students? Teachers
-   writing exercises?
-2. **What goes in** — typed notes, clicks on a staff, a fretboard, a keyboard, MIDI, audio, a photo.
-3. **What comes out** — standard notation, tab, both, chord charts; on screen, PDF, print,
-   MusicXML, MIDI; does it play back?
-4. **The instrument(s)** — guitar only, or any.
-5. **The numbered loop** the app exists to make fast, in order, e.g.
+   **Print/PDF [R, decision 3]**. No MusicXML. Playback is not asked for, so there is none
+   **[I]**.
+4. **Instrument.** The reference is guitar, treble clef 8vb. **Transposition is the core reason
+   chords are picked rather than typed [R]**: change the key from F♯ to A and *everything* moves
+   to A **[R]**. The reference itself is in B major (5 sharps).
+5. **The loop.**
 
    ```
-   1. start a sheet
-   2. put the first note down
-   ...
-   n. hand it to someone
+   1. start a sheet: title, source, key, tempo, time signature      [R key/tempo; I the rest]
+   2. lay out the form: sections (Intro, Chorus, Verse 1 …), bars each  [R structure]
+   3. put chords in bars, from the menu                               [R]
+   4. set each bar's rhythm: a strum pattern, slashes, a choke        [R rhythm notated; I how]
+   5. write cues into the boxes                                       [R]
+   6. mark repeats, endings, coda, N×                                 [R]
+   7. (any time) change key → whole chart transposes                  [R]
+   8. print / PDF it for the band                                     [R]
    ```
 
-6. **Which steps are his ruling and which are inference**, marked.
-7. **Where it ships** — standalone (this repo, Vite) or inside `learnMusicIn` (Next.js, vendored,
-   as the chord-tone trainer is). See §6.
+6. **Ruling vs inference.** Marked inline above.
+7. **Where it ships.** **Standalone, this repo [R, decision 3].** It can be vendored into
+   learnMusicIn later.
 
 **If a feature does not shorten a numbered step, it is not MVP.**
-
-**Until §0 exists, do not write feature logic.** Build platform, fix defects, prepare seams, ask
-questions — but a feature invented to fill the gap is the most expensive thing an agent can do here,
-because it looks like progress and it will be built on.
 
 ---
 
