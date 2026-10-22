@@ -201,3 +201,22 @@ EXIT=0 — verify-repo 5 checks passed, 39 tests in 3 files, tsc -b clean
 **Open:** Everything in `NEXT.md`. Systems are not spread vertically as MuseScore does, so the
 pages differ from the PDF's. Undo is lost on reload. Print has not been through a real dialog.
 There is no file export. He has not seen any of it.
+
+---
+
+## 2026-10-23 — Claude — decision 4: start the app on his port
+
+**Type:** decision
+**Files:** none — recorded before any code moved
+**Did:** Omkar, verbatim (from the next-step button):
+
+> *"Start the app on my port so I can try it."*
+
+The `sheet-music` preview was started on 5193. It opened on his chart with no errors (screenshot).
+
+**Inference, marked as inference:** The agents' server on 5194 stays as it is. His saved charts are
+on 5193's origin, separate from the agents' on 5194.
+
+**Why:** His instruction.
+
+**Open:** His verdict after trying it.
