@@ -5,7 +5,7 @@
 import { parseBar, rekeyChord, type BarChord } from "./chord";
 import { KEYS, sameKey, type Key } from "./pitch";
 import { builtinPatterns, starterPatterns, SLASHES_ID, type Pattern } from "./rhythm";
-import type { TimeSig } from "./ticks";
+import { barTicks, beatTicks, type TimeSig } from "./ticks";
 
 export type Clef = "treble8vb" | "treble" | "bass";
 
@@ -261,6 +261,31 @@ export function deletePattern(song: Song, id: string): Song {
         if (b.pattern !== id) return b;
         const { pattern: _drop, ...rest } = b;
         return rest;
+      }),
+    })),
+  };
+}
+
+/**
+ * Changing the meter keeps every chord where it was, counted in ticks from the bar's start. A chord
+ * that would now fall past the bar's end (beat 4 of 4/4 going to 3/4) moves to the new last beat,
+ * where it is still seen. Dropping it would lose his work, and keeping it unseen would leave the
+ * page lying (non-negotiables 3, 4). **Inference**: he has not ruled on meter changes.
+ */
+export function setTime(song: Song, time: TimeSig): Song {
+  const total = barTicks(time);
+  const last = total - beatTicks(time);
+  return {
+    ...song,
+    time,
+    sections: song.sections.map((s) => ({
+      ...s,
+      bars: s.bars.map((b) => {
+        if (b.chords.every((c) => c.tick < total)) return b;
+        const kept = b.chords.filter((c) => c.tick < last);
+        const moved = b.chords.filter((c) => c.tick >= last);
+        const lastChord = moved[moved.length - 1];
+        return { ...b, chords: lastChord ? [...kept, { ...lastChord, tick: last }] : kept };
       }),
     })),
   };

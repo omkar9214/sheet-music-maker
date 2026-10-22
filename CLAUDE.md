@@ -15,10 +15,11 @@ questions.
 
 | Path | What it is |
 |---|---|
-| `src/core/**` | Musical truth: the score model, durations, pitch spelling. **Empty until §0.** May never import from `ui/` (the gate checks). |
-| `src/ui/**` | Presentation. May read `core`; may never decide musical truth. Empty. |
-| `src/App.tsx` | The shell — the app's name and nothing else. |
-| `src/styles.css` | Three tokens. The design is chosen with the first feature. |
+| `src/core/**` | Musical truth: spelled keys (`pitch`), key-relative chords and transposition (`chord`), slash-rhythm patterns (`rhythm`), the chart and its edits (`song`), his reference chart (`khwabon`). May never import from `ui/` (the gate checks). |
+| `src/ui/engrave/**` | Song → pages (`layout`, pure, tested) and SVG (`Notation`). Geometry measured off his PDF (`metrics`). |
+| `src/ui/**` | The editor: the page with typed slots (`Sheet`), chord palette, inspector, top bar, save/undo (`store`). |
+| `src/App.tsx` | Wires the store, the layout and the editor. |
+| `docs/reference/` | His MuseScore PDF — the definition of "looks like a traditional chart". |
 | `skills/verify-repo/` | The gate's first step. Rules in `rules.mjs`, proven in `rules.test.mjs`. |
 | `skills/` | Shared skills; `.claude/skills/` symlinks to them. |
 | `docs/00-START-HERE.md` | Reading order. |

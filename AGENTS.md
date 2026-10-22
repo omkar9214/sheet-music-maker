@@ -298,8 +298,12 @@ rewrite. See `../CLAUDE.md`, "The vendor seam".
 Ports: **5193** for his use, **5194** for agents (`technique-trainer` taught that driving the app on
 his port overwrites his own saved data). `.claude/launch.json` has both.
 
-**No notation library is chosen.** VexFlow, OpenSheetMusicDisplay, Verovio and abcjs each imply a
-different model and licence; the choice follows §0, and it is `NEXT.md` item 1.
+**No notation library is used, by choice, since 2026-10-22 (WORKLOG work entry after decision 3).**
+It used to say none was chosen yet and that the choice would follow §0. §0 turned out narrow:
+slashes, chord symbols, cues, repeats. A library would bring a note model this app does not have,
+so the engraver is our own SVG (`src/ui/engrave/`). Its glyphs are **Leland** and its text is
+**Edwin**, MuseScore 4's own fonts (OFL, `@vexflow-fonts/*`), because his reference PDF is set in
+them. Revisit when note entry (§0, "second pass") arrives.
 
 ## 7. Style
 

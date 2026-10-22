@@ -44,6 +44,14 @@ export function normaliseQuality(q: string): string {
   return q.replace(/#/g, "♯").replace(/b(?=\d)/g, "♭");
 }
 
+/**
+ * A quality is a run of known chord-symbol words, numbers and signs. Anything else is a typo, and a
+ * refused typo costs a keystroke where a stored one costs a wrong chart. The first version allowed
+ * any letters, and the first browser drive stored `Bmaj7e9` (Tab hit before the old text was
+ * replaced) as B with quality "maj7e9".
+ */
+const QUALITY = /^(?:maj|min|mi|m|M|dim|aug|sus|add|alt|omit|no|Δ|ø|°|o|\+|-|\d+|[#♯b♭](?=\d)|\(|\)|\/(?=\d))*$/;
+
 export function parseChord(text: string, key: Key): Chord | null {
   const t = text.trim();
   const root = readSpelled(t);
@@ -51,15 +59,14 @@ export function parseChord(text: string, key: Key): Chord | null {
   let quality = root.rest;
   let bass: Degree | undefined;
   const slash = quality.lastIndexOf("/");
-  if (slash >= 0) {
+  // `C6/9` is a quality, not a bass note.
+  if (slash >= 0 && !/^\d+$/.test(quality.slice(slash + 1))) {
     const b = readSpelled(quality.slice(slash + 1));
     if (!b || b.rest !== "") return null;
     bass = toDegree(b.spelled, key);
     quality = quality.slice(0, slash);
   }
-  // A quality is letters, digits, signs and brackets. Anything else (`C#m/Q`, a stray comma) is a
-  // typo, and a refused typo costs a keystroke where a stored one costs a wrong chart.
-  if (!/^[A-Za-z0-9#♯♭+°ø()Δ-]*$/.test(quality)) return null;
+  if (!QUALITY.test(quality)) return null;
   const chord: Chord = { root: toDegree(root.spelled, key), quality: normaliseQuality(quality) };
   if (bass) chord.bass = bass;
   return chord;

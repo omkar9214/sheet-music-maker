@@ -3,7 +3,7 @@ import { barText, chordText, diatonicChords, parseBar, parseChord } from "./chor
 import { khwabon } from "./khwabon";
 import { KEYS, fifths, keyName, readSpelled, type Key } from "./pitch";
 import { barRhythm, beamGroups, parsePattern, starterPatterns } from "./rhythm";
-import { allBars, duplicateSection, setBarText, setKeyKeepChords, transpose, type Song } from "./song";
+import { allBars, duplicateSection, setBarText, setKeyKeepChords, setTime, transpose, type Song } from "./song";
 import { PPQ, barTicks } from "./ticks";
 
 const key = (name: string, mode: "major" | "minor" = "major"): Key => {
@@ -47,6 +47,15 @@ describe("chords", () => {
     expect(parseChord("H7", B)).toBeNull();
     expect(parseChord("C#m/Q", B)).toBeNull();
     expect(parseChord("C,", B)).toBeNull();
+    expect(parseChord("Bmaj7e9", B)).toBeNull();
+    expect(parseChord("Cmajor", B)).toBeNull();
+  });
+
+  it("accepts the qualities a chart uses", () => {
+    for (const q of ["maj7", "min11", "m+", "m7#9", "7sus2", "7sus4", "add9", "6/9", "13b9", "dim7", "aug", "ø7", "°", "7alt", "m(maj7)", "M7", "Δ7", "9(#11)", "mi7", "7b5", "sus", "5", "o7", "7no3"]) {
+      expect(parseChord(`C${q}`, B), q).not.toBeNull();
+    }
+    expect(chordText(parseChord("C6/9", B)!, B)).toBe("C6/9");
   });
 
   it("splits a bar evenly, holds with '.', refuses uneven counts", () => {
@@ -180,6 +189,18 @@ describe("song edits", () => {
     expect(b.bars.map((x) => x.cueAbove)).toEqual(a.bars.map((x) => x.cueAbove));
     expect(new Set([...a.bars, ...b.bars].map((x) => x.id)).size).toBe(a.bars.length * 2);
     expect(d.song.sections.length).toBe(song.sections.length + 1);
+  });
+
+  it("a meter change keeps every chord visible inside its bar", () => {
+    const song = khwabon();
+    const id = song.sections[0]!.bars[0]!.id;
+    const four = setBarText(song, id, "A . . E").song;
+    const three = setTime(four, { beats: 3, unit: 4 });
+    const bar = three.sections[0]!.bars[0]!;
+    expect(bar.chords.map((c) => [c.tick, chordText(c.chord!, three.key)])).toEqual([[0, "A"], [2 * PPQ, "E"]]);
+    // Untouched bars are the same objects: nothing else moved.
+    expect(three.sections[1]).not.toBe(four.sections[1]);
+    expect(three.sections[1]!.bars[0]).toBe(four.sections[1]!.bars[0]);
   });
 
   it("verses number themselves", () => {

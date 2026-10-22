@@ -136,3 +136,68 @@ wording.
 
 **Open:** Look and feel beyond "exactly like a traditional chart". Notation font. Whether one chart
 or many are kept (a song list).
+
+---
+
+## 2026-10-22 — Claude — work: the chart maker — first build, to decisions 2–3
+
+**Type:** work
+**Files:** `src/core/{ticks,pitch,chord,rhythm,song,khwabon}.ts`, `src/core/core.test.ts`,
+`src/ui/engrave/{metrics,layout,Notation,measure}.ts(x)`, `src/ui/engrave/layout.test.ts`,
+`src/ui/{Sheet,ChordPalette,Inspector,TopBar,store}.ts(x)`, `src/App.tsx`, `src/main.tsx`,
+`src/styles.css`, `package.json` (+ `@vexflow-fonts/leland`, `@vexflow-fonts/edwin`, both OFL),
+`skills/user-scenarios/chart-editor.md`, `AGENTS.md` §6 (amended), `CLAUDE.md` (map), `NEXT.md`
+**Did:**
+- **Chords are stored key-relative** (letter steps + semitones above the tonic). Transposing is
+  setting the key: lossless, and spelled by letter (B → F♯ turns A♯m7♯9 into E♯m7♯9, never F).
+  "Set key" re-reads the chords instead, for a key set wrong before typing.
+- **Rhythm is pattern stamps.** His Strum and Choke were read off a 400-dpi render of bars 1 and 22,
+  and both sum to 16 sixteenths. Slashes (one hollow slash per chord) and Beats are built in. A
+  pattern that doesn't sum to the bar is refused with the shortfall shown. A bar whose pattern
+  stops fitting after a meter change draws Beats.
+- **Our own SVG engraver, no notation library** (AGENTS.md §6 amended, with the reason). The
+  geometry is measured off his PDF: spatium 4.96 pt, 42.5 pt margins, a 24.8 pt first-system
+  indent, the chord baseline and cue offsets. Glyphs are Leland and text is Edwin, MuseScore 4's own
+  fonts. Leland has no slash noteheads, so slashes are paths. Beaming follows Gould (half bars in
+  4/4), with one inference, matched to the PDF: a boundary breaks a beam only where a note starts
+  on it.
+- **The page is the editor.** Click a bar to open its chord box. Enter or Tab goes on to the next
+  bar. `%` repeats and `.` holds. Cue slots show dashed on hover and across the selected system,
+  never in print. The palette under the chord box offers the song's chords by use, the key's
+  diatonic chords, and qualities. The inspector holds the bar (rhythm override, |: :| ×N, endings
+  1–4, segno/coda, jumps, insert/delete) and the section (rhythm, reorder, duplicate, delete, add).
+- **Saving:** every committed edit goes to localStorage at once. Unreadable saved data is backed up
+  under a timestamped key before anything is written. Undo is a stack of Song values, held in
+  memory.
+- First run opens his *Khwabon ke Parindey*, transcribed bar by bar (73 bars, every cue verbatim).
+
+**Verified:**
+
+```
+npm run check
+EXIT=0 — verify-repo 5 checks passed, 39 tests in 3 files, tsc -b clean
+```
+
+- The four-bar test was proven by toggling: it fails on the old spacing constants (1 failed / 10)
+  and passes on the new ones.
+- Pane, port 5194, his chart: 3 pages, as in the PDF. At 2.2× zoom the clef, five sharps, 4/4,
+  tempo, repeat signs, beams and rests were compared by eye against the PDF crops. No console
+  errors.
+- Driven, with state read from localStorage after each step:
+  - Chord box: `e9 g#m7` Tab, `%` Enter, `A B C` Enter → bars 2 and 3 stored, bar 4 refused with
+    "3 slots don't divide the bar".
+  - ⌘Z ×2 and ⇧⌘Z gave the right states.
+  - Transpose B → A redrew everything with 3 sharps, and Verse 1 broke 6 + 4 as in the PDF.
+  - Cues above bars 24–25 in a system with no cue row were both stored. The first version lost
+    one; see the scenarios file.
+  - Ending 1 + :| on bar 26, + After, then ending 2 → both brackets drawn.
+  - Duplicate a section, add a Pre-Chorus, type two bars, reload → all persisted.
+  - A pattern typed a 16th short showed "short 1/16" and did not change the chart.
+  - 3/4 → Strum and Choke bars fall back to beats.
+- 900-px window: the page stays 887 px, the scroller scrolls, and the document doesn't overflow.
+- Print: the print rules applied on screen gave 3 pages at 816×1056 px (8.5×11 in) with the top bar,
+  inspector and edit layer hidden. Screenshot. A real print dialog was not opened.
+
+**Open:** Everything in `NEXT.md`. Systems are not spread vertically as MuseScore does, so the
+pages differ from the PDF's. Undo is lost on reload. Print has not been through a real dialog.
+There is no file export. He has not seen any of it.

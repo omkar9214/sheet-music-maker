@@ -78,6 +78,8 @@ head or on paper and is copying it in at speed; **the arranger**, who changes th
   above gets a cue row, and one without doesn't, so empty space is not printed. [built]
 - **· two cues in one bar, both above** → not MVP. One above and one below covers every bar of the
   PDF. [open: wait until he hits it]
+- **· Escape in a chord box** → cancels: the bar keeps what it had. Enter, Tab or clicking away
+  keeps what was typed. [built]
 
 ## Structure (steps 2, 6)
 
@@ -121,4 +123,16 @@ head or on paper and is copying it in at speed; **the arranger**, who changes th
 
 ## What walking it found
 
-(filled in during verification)
+- **Spacing broke the Intro 3 + 1** where the PDF has 4. Spacing tightened (1.2+2.0·√ → 1.1+1.9·√).
+  Test: "fits four strum bars on a system", proven to fail on the old constants.
+- **`Bmaj7e9` was stored as a chord.** Typing into a box that still held "Bmaj7" appended to it, and
+  any letters were accepted as a quality. Quality is now a closed vocabulary (`QUALITY` in
+  `core/chord.ts`), and the box selects its text on open. Tests: "refuses typos", "accepts the
+  qualities a chart uses".
+- **A cue typed into a system with no cue row was lost.** The box was filled in one effect and
+  focused in a later one, so keystrokes in between went nowhere. Each slot is now its own keyed input
+  that mounts with its text and focuses in the same commit. Verified in the browser (Melody bars
+  24–25), not by a unit test: the race lives in React's effect timing.
+- **The palette hung 96 px past the scroller** at the last bar of a system. Clamped inside the page.
+- **A meter change could push a chord past the bar's end** (beat 4 of 4/4 → 3/4). It is now moved to
+  the last beat, still visible. Test: "a meter change keeps every chord visible inside its bar".

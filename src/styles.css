@@ -1,11 +1,134 @@
-/* Placeholder until a design is chosen with the first feature (AGENTS.md §0). Tokens first, before
-   any component — retrofitting them is the design job that never gets done (guitar-app-template). */
+/* The chart is the product, so the chrome around it is quiet: warm paper grey, one accent, system
+   sans for controls. Notation colours come from the score, never from here. */
 :root {
-  --bg: #fbfaf7;
+  --bg: #e9e6e0;
+  --panel: #f7f5f1;
   --ink: #1d1b18;
+  --muted: #7a746b;
+  --line: #d6d1c8;
+  --accent: #2f5fd0;
+  --accent-soft: rgba(47, 95, 208, 0.1);
+  --danger: #c0392b;
   --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ink-score: #000;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); }
-.shell { padding: 32px; }
-.shell h1 { margin: 0; font-size: 20px; font-weight: 600; }
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 13px; }
+button { font: inherit; color: inherit; }
+
+.app { display: flex; flex-direction: column; height: 100%; }
+
+.topbar {
+  display: flex; align-items: center; gap: 6px; padding: 8px 12px;
+  background: var(--panel); border-bottom: 1px solid var(--line); flex: none;
+}
+.topbar .spacer { flex: 1; }
+.tb {
+  height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.tb:hover:not(:disabled) { border-color: #b9b2a6; }
+.tb.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.tb:disabled { opacity: 0.3; cursor: default; }
+.tb.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+.tb.tempo input { width: 36px; border: 0; font: inherit; background: transparent; outline: none; }
+.chart-name { font-weight: 600; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.warn { color: var(--danger); font-weight: 600; }
+
+.pop { position: relative; }
+.pop-panel {
+  position: absolute; top: 36px; left: 0; z-index: 20; min-width: 200px; padding: 10px;
+  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.key-panel { width: 420px; display: flex; flex-direction: column; gap: 8px; }
+.key-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.key-grid .chip { justify-content: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; align-self: flex-start; }
+.seg button { border: 0; background: #fff; padding: 5px 12px; cursor: pointer; }
+.seg button.on { background: var(--ink); color: #fff; }
+.charts-panel { width: 320px; display: flex; flex-direction: column; gap: 8px; }
+.chart-list { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow: auto; }
+.chart-list li { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-radius: 4px; }
+.chart-list li.on { background: var(--accent-soft); }
+.chart-list li .link { flex: 1; text-align: left; }
+.patterns-panel { width: 470px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.pattern-row { display: grid; grid-template-columns: 110px 210px 1fr 24px; gap: 6px; align-items: center; width: 100%; }
+.pattern-row.builtin .pname { color: var(--muted); padding-left: 6px; }
+.pattern-row input { height: 28px; border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; font: inherit; }
+.pattern-row .ptext { font-family: ui-monospace, Menlo, monospace; }
+.pattern-row .invalid { border-color: var(--danger); }
+.perr { color: var(--danger); font-size: 12px; }
+
+.link { border: 0; background: none; padding: 0; cursor: pointer; font-weight: inherit; }
+.link:hover { text-decoration: underline; }
+.x { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; padding: 0 4px; }
+.x:hover { color: var(--danger); }
+.muted { color: var(--muted); font-weight: 400; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.chip {
+  display: inline-flex; align-items: center; height: 26px; padding: 0 9px; border-radius: 5px;
+  border: 1px solid var(--line); background: #fff; cursor: pointer; white-space: nowrap;
+}
+.chip:hover:not(:disabled) { border-color: #b9b2a6; }
+.chip.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.chip:disabled { opacity: 0.35; cursor: default; }
+
+.workspace { flex: 1; display: flex; min-height: 0; }
+.scroller { flex: 1; overflow: auto; padding: 24px; }
+.sheet { display: flex; flex-direction: column; align-items: center; gap: 24px; width: max-content; margin: 0 auto; }
+.page { position: relative; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 6px 20px rgba(0, 0, 0, 0.06); flex: none; }
+.page-svg { display: block; }
+
+.inspector {
+  width: 300px; flex: none; overflow: auto; background: var(--panel); border-left: 1px solid var(--line);
+  padding: 14px; display: flex; flex-direction: column; gap: 18px;
+}
+.inspector h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+.inspector .row { display: grid; grid-template-columns: 56px 1fr; gap: 6px; align-items: start; margin-bottom: 7px; }
+.inspector .lbl { color: var(--muted); padding-top: 5px; }
+.stepper { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; }
+.stepper button { width: 24px; height: 26px; border: 1px solid var(--line); border-radius: 5px; background: #fff; cursor: pointer; }
+.stepper button:disabled { opacity: 0.35; cursor: default; }
+.stepper span { min-width: 26px; text-align: center; font-weight: 600; }
+
+/* Edit layer: invisible until it helps. Empty slots are dashed on the hovered bar and across the
+   selected system; nothing here prints. */
+.edit-layer .hit { fill: transparent; cursor: pointer; }
+.edit-layer .sel { fill: var(--accent-soft); pointer-events: none; }
+.edit-layer .slot { fill: transparent; stroke: transparent; cursor: text; }
+.edit-layer .slot.empty { stroke-dasharray: 2 2; stroke-width: 0.6; }
+.edit-layer .bar-edit:hover .slot.empty,
+.edit-layer .sys.selected .slot.empty { stroke: #9aa7c7; }
+.edit-layer .slot.filled:hover,
+.edit-layer .slot.empty-hover:hover { fill: var(--accent-soft); }
+.edit-layer .slot.active { stroke: transparent !important; }
+
+.slot-input {
+  position: absolute; z-index: 5; margin: 0; padding: 0 4px; border: 1.5px solid var(--accent);
+  border-radius: 3px; background: #fff; color: #000; outline: none;
+  box-shadow: 0 2px 10px rgba(47, 95, 208, 0.18);
+}
+.slot-input.invalid { border-color: var(--danger); box-shadow: 0 2px 10px rgba(192, 57, 43, 0.2); }
+.slot-error { position: absolute; z-index: 6; color: #fff; background: var(--danger); padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+.palette-wrap { position: absolute; z-index: 6; }
+.palette {
+  width: 430px; padding: 8px; background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); display: flex; flex-direction: column; gap: 6px;
+}
+.palette-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.palette-label { width: 52px; color: var(--muted); font-size: 12px; }
+.palette .chip { height: 24px; padding: 0 7px; font-family: Edwin, serif; font-size: 14px; }
+
+@page { size: letter; margin: 0; }
+@media print {
+  html, body, #root, .app, .workspace, .scroller { height: auto; overflow: visible; background: #fff; }
+  .topbar, .inspector, .edit-layer, .slot-input, .palette-wrap, .slot-error { display: none !important; }
+  .scroller { padding: 0; }
+  .sheet { gap: 0; width: auto; }
+  .page { box-shadow: none; width: 8.5in !important; height: 11in !important; break-after: page; overflow: hidden; }
+  .page:last-child { break-after: auto; }
+  .page-svg { width: 8.5in; height: 11in; }
+}

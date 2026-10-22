@@ -2,32 +2,36 @@
 
 The live queue, in order. Meant to be edited — unlike `WORKLOG.md`.
 
-Branch: `main`, no remote. First commit is the scaffold (decision 1).
+Branch: `main`, no remote. §0 is written (decisions 2–3), and the first build of the chart maker is
+done (WORKLOG, the work entry after decision 3).
 
 ## Now
 
-0. **Omkar writes `AGENTS.md` §0 — the brief.** Nothing below item 1 can start without it. The
-   questions are listed in §0 itself. Recommendation to put to him if he wants one: a notation +
-   tab editor for guitar, typed and clicked input, on-screen and PDF output, playback with the
-   Technique Trainer's samples — the product the existing code and his other apps make cheapest.
-   Inference; he has not said any of it.
+1. **Omkar uses it on a real song.** He has not seen it yet. Everything below waits on what he says.
+   Ask nothing before he has.
 
-1. **Choose the rendering from §0, by measurement, not by reputation.** Candidates (from memory,
-   unverified — check licence and maintenance before choosing): VexFlow (low-level SVG engraving),
-   OpenSheetMusicDisplay (MusicXML on top of VexFlow), Verovio (WASM engraver, MEI/MusicXML),
-   abcjs (ABC text). Render the same three real scores in each — one with tuplets and ties, one
-   with tab, one dense — and compare legibility, bundle size and whether it lets non-negotiables
-   1–3 hold (our model, their drawing). Or our own SVG if §0 is narrow enough.
+## Known gaps, in the order they will probably hurt
 
-2. **Then the core model** (`src/core/score.ts`): exact durations and spelled pitch
-   (non-negotiables 1–2) with tests first, before any UI.
-
-3. **Then saving and undo** (non-negotiable 4), before the second feature — retrofitting it is a
-   rewrite.
+2. **Spacing is not MuseScore's.** Systems are not spread to fill the page (MuseScore does that),
+   so page 1 ends with white space, and Melody falls to page 2 where the PDF has it on page 1.
+   Measure against the PDF before tuning (`src/ui/engrave/metrics.ts` says which numbers are
+   measured and which are inference).
+3. **Undo does not survive a reload.** The chart does. If he wants it, store the stack per chart
+   in localStorage, capped.
+4. **One cue above and one below per bar.** Two above in one bar is not possible, though the rows
+   stack when neighbouring cues collide. The PDF never needed it.
+5. **Chord positions are even slots** (`.` holds). Off-beat pushes (a chord on the "and" of 4) need
+   8 slots typed, e.g. `A . . . . . . E`. It works but is clumsy.
+6. **Print was checked by applying the print stylesheet on screen** (3 pages at 816×1056 px, the
+   UI hidden), not through a real print dialog or a saved PDF. First real print: check the page
+   breaks and margins.
+7. **No export/import file.** Charts live in this browser only. A JSON download/upload is cheap, but
+   it would need a round-trip test (non-negotiable 5).
+8. **Note entry: the "second pass" he mentioned.** It is not MVP. When it comes, revisit the no-library
+   decision (AGENTS.md §6).
 
 ## Open with him
 
-- §0, all of it.
-- §5's seven non-negotiables — written by Claude, none ruled.
-- Standalone, or eventually vendored into `learnMusicIn` (it changes nothing today; it decides
-  whether anything here may assume Vite).
+- §5's seven non-negotiables: written by Claude, none ruled.
+- Whether a chart should be shareable beyond this browser (that is the only thing that would bring a
+  backend).
