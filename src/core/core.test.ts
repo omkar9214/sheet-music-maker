@@ -1,0 +1,190 @@
+import { describe, expect, it } from "vitest";
+import { barText, chordText, diatonicChords, parseBar, parseChord } from "./chord";
+import { khwabon } from "./khwabon";
+import { KEYS, fifths, keyName, readSpelled, type Key } from "./pitch";
+import { barRhythm, beamGroups, parsePattern, starterPatterns } from "./rhythm";
+import { allBars, duplicateSection, setBarText, setKeyKeepChords, transpose, type Song } from "./song";
+import { PPQ, barTicks } from "./ticks";
+
+const key = (name: string, mode: "major" | "minor" = "major"): Key => {
+  const s = readSpelled(name)!.spelled;
+  return KEYS.find((k) => k.mode === mode && k.tonic.letter === s.letter && k.tonic.acc === s.acc)!;
+};
+const B = key("B");
+const T44 = { beats: 4, unit: 4 as const };
+
+/** Every chord symbol in the chart, in reading order, as text. */
+function chordsOf(song: Song): string[] {
+  return allBars(song).flatMap((x) => x.bar.chords.map((c) => (c.chord ? chordText(c.chord, song.key) : "N.C.")));
+}
+
+describe("keys", () => {
+  it("has a signature for every key in the menu, and the circle is right", () => {
+    expect(KEYS.map((k) => `${keyName(k)}:${fifths(k)}`).slice(0, 15).join(" ")).toBe(
+      "C:0 G:1 D:2 A:3 E:4 B:5 F♯:6 C♯:7 F:-1 B♭:-2 E♭:-3 A♭:-4 D♭:-5 G♭:-6 C♭:-7",
+    );
+    expect(fifths(key("C#", "minor"))).toBe(4);
+    expect(fifths(key("D", "minor"))).toBe(-1);
+    expect(fifths(key("A#", "minor"))).toBe(7);
+  });
+});
+
+describe("chords", () => {
+  it("reads sloppy typing and spells it in the key", () => {
+    const t = (s: string) => chordText(parseChord(s, B)!, B);
+    expect(t("c#m11")).toBe("C♯m11");
+    expect(t("C#min11")).toBe("C♯min11");
+    expect(t("C♯min11")).toBe("C♯min11");
+    expect(t("g#m7#9")).toBe("G♯m7♯9");
+    expect(t("bb7")).toBe("B♭7");
+    expect(t("Bb/D")).toBe("B♭/D");
+    expect(t("F#7sus2")).toBe("F♯7sus2");
+    expect(t("D#m+")).toBe("D♯m+");
+    expect(t("E7b9")).toBe("E7♭9");
+  });
+
+  it("refuses typos", () => {
+    expect(parseChord("H7", B)).toBeNull();
+    expect(parseChord("C#m/Q", B)).toBeNull();
+    expect(parseChord("C,", B)).toBeNull();
+  });
+
+  it("splits a bar evenly, holds with '.', refuses uneven counts", () => {
+    const two = parseBar("Bmaj7 C#m11", B, T44);
+    expect(two.ok && two.chords.map((c) => c.tick)).toEqual([0, 2 * PPQ]);
+    const hold = parseBar("A . . E", B, T44);
+    expect(hold.ok && hold.chords.map((c) => c.tick)).toEqual([0, 3 * PPQ]);
+    expect(parseBar("A B C", B, T44).ok).toBe(false);
+    expect(parseBar(". A", B, T44).ok).toBe(false);
+    const nc = parseBar("NC", B, T44);
+    expect(nc.ok && nc.chords[0]!.chord).toBeNull();
+  });
+
+  it("barText is the inverse of parseBar", () => {
+    for (const text of ["Bmaj7", "Bmaj7 C♯m11", "A . . E", "N.C.", "A B C♯ D", ""]) {
+      const p = parseBar(text, B, T44);
+      expect(p.ok).toBe(true);
+      if (p.ok) expect(barText(p.chords, B, T44)).toBe(text);
+    }
+  });
+
+  it("diatonic rows read like a textbook", () => {
+    expect(diatonicChords(B).map((c) => chordText(c, B)).join(" ")).toBe("B C♯m D♯m E F♯ G♯m A♯°");
+    expect(diatonicChords(key("A", "minor")).map((c) => chordText(c, key("A", "minor"))).join(" ")).toBe(
+      "Am B° C Dm Em F G",
+    );
+  });
+});
+
+describe("transpose — decision 2, on every chord in his chart", () => {
+  const song = khwabon();
+  const original = chordsOf(song);
+  const unique = (xs: string[]) => [...new Set(xs)].join(" ");
+
+  it("the chart has the PDF's chords and 73 bars", () => {
+    expect(allBars(song).length).toBe(73);
+    expect(unique(original)).toBe("Bmaj7 C♯min11 Emaj9 D♯m+ G♯m7♯9 A♯m7♯9 Amaj7 Emaj7 F♯7sus2");
+  });
+
+  it("B → A respells by letter, never enharmonically", () => {
+    expect(unique(chordsOf(transpose(song, key("A"))))).toBe(
+      "Amaj7 Bmin11 Dmaj9 C♯m+ F♯m7♯9 G♯m7♯9 Gmaj7 Dmaj7 E7sus2",
+    );
+  });
+
+  it("B → F♯: A♯ becomes E♯, not F (non-negotiable 2)", () => {
+    expect(unique(chordsOf(transpose(song, key("F#"))))).toBe(
+      "F♯maj7 G♯min11 Bmaj9 A♯m+ D♯m7♯9 E♯m7♯9 Emaj7 Bmaj7 C♯7sus2",
+    );
+  });
+
+  it("B → C♯: A♯ becomes B♯", () => {
+    expect(chordsOf(transpose(song, key("C#")))).toContain("B♯m7♯9");
+  });
+
+  it("is lossless through every key and back", () => {
+    let s = song;
+    for (const k of KEYS) s = transpose(s, k);
+    s = transpose(s, B);
+    expect(chordsOf(s)).toEqual(original);
+  });
+
+  it("Set key keeps every chord as written", () => {
+    const s = setKeyKeepChords(song, key("A"));
+    expect(chordsOf(s)).toEqual(original);
+    expect(keyName(s.key)).toBe("A");
+  });
+});
+
+describe("rhythm — non-negotiable 1", () => {
+  it("his strum and choke sum to a 4/4 bar exactly", () => {
+    for (const p of starterPatterns()) {
+      const r = parsePattern(p.text, T44);
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.events.reduce((a, e) => a + e.ticks, 0)).toBe(barTicks(T44));
+    }
+  });
+
+  it("refuses a short or long bar and says by how much", () => {
+    expect(parsePattern("8 8 r16 8 8 8 4", T44)).toEqual({ ok: false, error: "short 1/16" });
+    expect(parsePattern("4 4 4 4 8", T44)).toEqual({ ok: false, error: "over by 1/8" });
+    expect(parsePattern("4 4 3 4", T44)).toEqual({ ok: false, error: '"3" is not a duration' });
+    expect(parsePattern("2. 4", T44).ok).toBe(true);
+  });
+
+  it("the strum beams like the PDF: [8 8] r [8 8 8] r 4", () => {
+    const r = parsePattern("8 8 r16 8 8 8 r16 4", T44);
+    expect(r.ok && beamGroups(r.events, T44)).toEqual([[0, 1], [3, 5]]);
+  });
+
+  it("eight 8ths beam in half bars (Gould)", () => {
+    const r = parsePattern("8 8 8 8 8 8 8 8", T44);
+    expect(r.ok && beamGroups(r.events, T44)).toEqual([[0, 3], [4, 7]]);
+  });
+
+  it("a pattern that no longer fits the meter falls back to beats, never overfull", () => {
+    const strum = starterPatterns()[0]!;
+    const r = barRhythm(strum, [], { beats: 3, unit: 4 });
+    expect(r.fellBack).toBe(true);
+    expect(r.events.reduce((a, e) => a + e.ticks, 0)).toBe(barTicks({ beats: 3, unit: 4 }));
+  });
+
+  it("Slashes is one slash per chord, lasting until the next", () => {
+    const p = parseBar("Bmaj7 C#m11", B, T44);
+    const r = barRhythm({ id: "slashes", name: "Slashes", text: "" }, p.ok ? p.chords : [], T44);
+    expect(r.events.map((e) => e.ticks)).toEqual([2 * PPQ, 2 * PPQ]);
+    expect(r.stemless).toBe(true);
+  });
+});
+
+describe("song edits", () => {
+  it("% copies the previous bar, across a section boundary", () => {
+    const song = khwabon();
+    const firstChorusBar = song.sections[1]!.bars[0]!.id;
+    const r = setBarText(song, firstChorusBar, "%");
+    expect(r.error).toBeUndefined();
+    expect(chordsOf(r.song)[4]).toBe("C♯min11");
+  });
+
+  it("a refused bar leaves the song untouched", () => {
+    const song = khwabon();
+    const r = setBarText(song, song.sections[0]!.bars[0]!.id, "H7");
+    expect(r.error).toBeDefined();
+    expect(r.song).toBe(song);
+  });
+
+  it("duplicate keeps chords and cues with fresh ids", () => {
+    const song = khwabon();
+    const d = duplicateSection(song, song.sections[1]!.id)!;
+    const [a, b] = [d.song.sections[1]!, d.song.sections[2]!];
+    expect(b.bars.map((x) => x.cueAbove)).toEqual(a.bars.map((x) => x.cueAbove));
+    expect(new Set([...a.bars, ...b.bars].map((x) => x.id)).size).toBe(a.bars.length * 2);
+    expect(d.song.sections.length).toBe(song.sections.length + 1);
+  });
+
+  it("verses number themselves", () => {
+    const song = khwabon();
+    const d = duplicateSection(song, song.sections[2]!.id)!;
+    expect(d.section.name).toBe("Verse 4");
+  });
+});
