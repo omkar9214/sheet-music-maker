@@ -7,7 +7,10 @@ Branch: `main`, no remote. §0 is written (decisions 2–3). The editor was rede
 
 ## Now
 
-1. **Omkar tries the redesigned editor** on 5193. Everything below waits on what he says.
+1. **Omkar tries beat cells and the rhythm grid** (decision 6). Everything below waits on what he
+   says. **Note:** on 2026-10-23 his chart "Bang Bang" was found on **5194**, the agents' port. It
+   was backed up before testing and restored after. His port is 5193, and agents must never clear
+   5194's storage without checking it first.
 
 ## Known gaps, in the order they will probably hurt
 
@@ -22,8 +25,8 @@ Branch: `main`, no remote. §0 is written (decisions 2–3). The editor was rede
 5. **There is no visible keyboard help.** The keys are listed in `App.tsx`'s header comment only.
    If he doesn't discover typing-to-enter, a one-line hint in the empty inspector may be warranted.
    §7.1 says labels only, so ask first.
-6. **Chord positions are even slots** (`.` holds). Off-beat pushes (a chord on the "and" of 4) need
-   8 slots typed, e.g. `A . . . . . . E`. It works but is clumsy.
+6. **Chords between beats** (a push on the "and" of 4) cannot be typed into beat cells. A bar that
+   already has one opens with 8th cells. If he needs pushes, add a way to halve the cells.
 7. **Print was checked by applying the print stylesheet on screen** (3 pages at 816×1056 px, the
    UI hidden), not through a real print dialog or a saved PDF. First real print: check the page
    breaks and margins.

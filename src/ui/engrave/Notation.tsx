@@ -151,6 +151,20 @@ function Bar({ b, s }: { b: BarLayout; s: SystemLayout }) {
     }
   });
 
+  // Ties (decision 6: a strum that rings across a beat is written as two tied values). Stems are
+  // down, so the tie curves above the slashes, from the middle of one to the middle of the next.
+  b.events.forEach((e, i) => {
+    const next = b.events[i + 1];
+    if (!e.tie || !next) return;
+    const x1 = e.x + SLASH_W * 0.75;
+    const x2 = next.x + SLASH_W * 0.35;
+    const y = yTop - 0.35 * SP;
+    const mx = (x1 + x2) / 2;
+    out.push(
+      <path key={`t${i}`} d={`M${x1},${y} Q${mx},${y - 1.25 * SP} ${x2},${y} Q${mx},${y - 0.95 * SP} ${x1},${y} Z`} fill={INK} />,
+    );
+  });
+
   for (const [a, z] of b.beams) {
     const x1 = b.events[a]!.x;
     const x2 = b.events[z]!.x + LINE.stem;

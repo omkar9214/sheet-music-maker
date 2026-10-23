@@ -332,3 +332,92 @@ The 53 was written before the run and was never measured. Nothing else in that e
 the number.
 
 **Verified:** `npx vitest run` → Test Files 4 passed, Tests 49 passed.
+
+---
+
+## 2026-10-23 — Claude — decision 6: rhythm must be changeable; chord adding is weird; think as the user
+
+**Type:** decision
+**Files:** none — recorded before any code moved
+**Did:** Omkar, verbatim:
+
+> *"Need to be able to change the rhythm, and chord adding logic is weird.*
+>
+> *Think from the perspective of user *
+> */user-scenarios"*
+
+**The measurement:**
+- **Rhythm.** A bar's rhythm can only be one of the named stamps (Slashes, Beats, Strum, Choke). The
+  only way to make a new one is the top bar's Patterns popover, typing a duration string like
+  `8 8 r16 8 8 8 r16 4`, which is musician-hostile. There is no way to change one bar's strum
+  without inventing a named pattern first.
+- **Chords.** Where a chord falls is decided by how many tokens are typed. `Bmaj7 C#m11` means beats
+  1 and 3. A chord on beat 4 needs `A . . E`. Beat 2 alone is impossible: "starts with a hold" is
+  refused. Nothing on screen shows the beats.
+
+**Inference, marked as inference:**
+- "Weird" is the hidden token→beat mapping. The fix is to make the beats visible and type into them:
+  iReal Pro's four spaces per bar, and Dorico's Space-to-next-beat. It is not a change to how
+  chords are spelled or suggested.
+- "Change the rhythm" means per bar and per selection, by clicking, not by typing durations. A named
+  pattern is still how one rhythm is reused.
+- He invoked the skill, so the scenarios are walked and written down before building
+  (`skills/user-scenarios/chart-editor.md`).
+
+**Why:** His instruction.
+
+**Open:** Whether chords off the beat (the "and" of 4) are needed. His chart has none.
+
+---
+
+## 2026-10-23 — Claude — work: beat cells for chords, a step grid for rhythm (decision 6)
+
+**Type:** work
+**Files:** `src/core/rhythm.ts` (ties, `Step`, grid ↔ notation), `src/core/chord.ts` (`chordCells`,
+`chordsFromCells`, `chordSpans` fills a beat-2 start), `src/core/song.ts` (`Bar.rhythm`,
+`setBarsRhythm`, `setBarsPattern`, `saveRhythmAsPattern`, `updatePatternText`, `setBarCells`),
+`src/ui/RhythmGrid.tsx` + `rhythmGrid.test.ts` (new), `src/ui/Sheet.tsx` (`ChordCells` replaces the
+free-text box), `src/ui/Inspector.tsx` (Rhythm block), `src/ui/TopBar.tsx` (Patterns as grids),
+`src/ui/engrave/{layout.ts,Notation.tsx}` (own rhythm, ties), `src/App.tsx`, `src/styles.css`,
+`src/core/core.test.ts`, `skills/user-scenarios/chart-editor.md`, `NEXT.md`
+**Did:** Walked the scenarios first, in the scenarios file under "Chords on beats, rhythm by
+clicking".
+- **Chords:** a bar opens as one box per beat, numbered, under the bar. Typing goes into the active
+  beat. Space and Shift+Space step between beats, and so do ⌫ on an empty box and ←/→ at a box's
+  edge. Enter/Tab stores the bar and opens the next. An empty beat means the chord before carries
+  on, so a chord on beat 2 alone is now possible. A typo marks its beat red, and the bar is not
+  stored.
+- **Rhythm:** the inspector shows the focus bar's strum as 16th steps counted "1 e & a". A click goes
+  ring → strum → silence, skipping any state that would look the same. The result applies to every
+  selected bar. A rhythm equal to a named pattern uses that pattern; anything else is the bar's own
+  (`Bar.rhythm`), shown as "Custom", with "Save as pattern". The Patterns menu edits a named pattern
+  with the same grid, for every bar using it.
+- **Notation is computed from the steps.** 8ths and 16ths stay single, his Strum's shape included. A
+  writable value inside one beat, or on a beat without crossing mid-bar, stays single, and so does
+  "8 4 8". Everything else is tied at the beat. Rests split by the beat. Ties are drawn above the
+  slashes. The rules are inference, cited as such in `rhythm.ts`.
+
+**Verified:**
+
+```
+npm run check
+EXIT=0 — verify-repo 5 checks passed, 65 tests in 5 files, tsc -b clean
+```
+
+- The grid↔notation mapping is asserted exhaustively, not sampled (§9.12): all 3^8 first-half grids
+  come back identical through notation, and every click changes the drawn state (3^4 × 4).
+- His Strum comes back exactly as `8 8 r16 8 8 8 r16 4`. His Choke's rests renotate as r16 r8 r4
+  (stated, not hidden).
+- Pane on 5194, real keys:
+  - Bar 2: `e` `maj9` Space Space `f#7sus2` Enter stored Emaj9 on beat 1 and F♯7sus2 on beat 3.
+    Bar 3 then opened with its chords, "Emaj9" selected.
+  - Space, `H7`, Enter: beat 2 went red with "\"H7\" is not a chord", and the bar was not stored.
+  - Bar 3, step "&" of 4: own rhythm `8 8 r16 8 8 8 r16 8 8`, redrawn, "Custom" shown. Save as
+    pattern "Push": the bar used it, and the chip was on.
+  - Step "2": `8 8~ 16 …` with the tie drawn (screenshot at 2.4×).
+  - Patterns menu, Strum step 16: Strum became `… r16 8. 16` everywhere. ⌘Z restored it.
+- **His data:** 5194's storage held his chart "Bang Bang". It was backed up first and restored after,
+  confirmed by reading it back.
+
+**Open:** He hasn't tried it. Pushes between beats can't be entered (`NEXT.md` 6). Rhythm grids have
+no keyboard control. 6/8 and 12/8 were checked in unit tests only, not in the browser.

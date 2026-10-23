@@ -9,12 +9,14 @@
  *   Esc       deselect                ⌘Z / ⇧⌘Z    undo / redo
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { barText } from "./core/chord";
+import { barText, chordCells } from "./core/chord";
+import { barRhythm, gridOfRhythm, textFromGrid } from "./core/rhythm";
 import {
-  addSection, allBars, barRange, clearChords, copyBars, deleteBars, deletePattern, deleteSection,
-  duplicateSection, findBar, insertBar, moveSection, pasteBars, setBarCount, setBarText, setKeyKeepChords,
-  setPatterns, setRepeat, setTime, toggleEnding, transpose, updateBar, updateBars, updateSection,
-  type Bar, type BarClip, type Song,
+  addSection, allBars, barPatternId, barRange, clearChords, copyBars, deleteBars, deletePattern,
+  deleteSection, duplicateSection, findBar, insertBar, moveSection, pasteBars, patternById,
+  saveRhythmAsPattern, setBarCells, setBarCount, setBarsPattern, setBarsRhythm, setKeyKeepChords,
+  setPatterns, setRepeat, setTime, toggleEnding, transpose, updateBar,
+  updateSection, type Bar, type BarClip, type Song,
 } from "./core/song";
 import { FormPanel, type FormActions } from "./ui/FormPanel";
 import { Inspector, type InspectorActions } from "./ui/Inspector";
@@ -80,10 +82,17 @@ export function App() {
     [song],
   );
 
-  const onCommitChords = useCallback(
-    (id: string, value: string, move: 1 | -1 | 0): string | null => {
-      if (value.trim() !== chordText(id)) {
-        const r = setBarText(song, id, value);
+  const cellsOf = useCallback(
+    (id: string) => chordCells(barOf(song, id)?.chords ?? [], song.key, song.time),
+    [song],
+  );
+
+  const onCommitCells = useCallback(
+    (id: string, cells: string[], cellTicks: number, move: 1 | -1 | 0) => {
+      const before = cellsOf(id);
+      const changed = cellTicks !== before.cellTicks || cells.some((c, i) => c.trim() !== before.cells[i]);
+      if (changed) {
+        const r = setBarCells(song, id, cells, cellTicks);
         if (r.error) return r.error;
         edit(() => r.song);
       }
@@ -91,7 +100,7 @@ export function App() {
         setEntry(null);
         return null;
       }
-      // Enter / Tab: on to the next bar with the box still open, which is the transcribing loop
+      // Enter / Tab: on to the next bar with the boxes still open, which is the transcribing loop
       // (§0 step 3). Off the end of the chart, entry closes and the last bar stays selected.
       const flat = allBars(song);
       const next = flat[flat.findIndex((x) => x.bar.id === id) + move];
@@ -103,8 +112,17 @@ export function App() {
       }
       return null;
     },
-    [song, edit, chordText],
+    [song, edit, cellsOf],
   );
+
+  // The focus bar's rhythm as steps, for the inspector's grid.
+  const focusRhythm = useMemo(() => {
+    const r = sel ? findBar(song, sel.focus) : null;
+    if (!r) return null;
+    const sec = song.sections[r.section]!;
+    const bar = sec.bars[r.bar]!;
+    return gridOfRhythm(barRhythm(patternById(song, barPatternId(sec, bar)), bar.chords, song.time, bar.rhythm), song.time);
+  }, [song, sel]);
 
   const onOpen = (id: string, zone: Zone) => {
     select(id);
@@ -190,23 +208,12 @@ export function App() {
   const actions: InspectorActions = {
     openChords: () => sel && setEntry({ barId: sel.focus }),
     setCue: (which, text) => ids[0] && edit((s) => updateBar(s, ids[0]!, { [which]: text })),
-    setRhythm: (pid) =>
-      edit((s) => {
-        // A whole section selected sets the section's rhythm. Otherwise each bar gets an override,
-        // or loses it when the pick is its section's own.
-        let out = s;
-        for (const sec of s.sections) {
-          const mine = sec.bars.filter((b) => selected.has(b.id));
-          if (mine.length === 0) continue;
-          if (mine.length === sec.bars.length) {
-            out = updateSection(out, sec.id, { pattern: pid });
-            out = updateBars(out, mine.map((b) => b.id), { pattern: undefined });
-          } else {
-            out = updateBars(out, mine.map((b) => b.id), { pattern: pid === sec.pattern ? undefined : pid });
-          }
-        }
-        return out;
-      }),
+    setRhythm: (pid) => edit((s) => setBarsPattern(s, ids, pid)),
+    setSteps: (steps) => edit((s) => setBarsRhythm(s, ids, textFromGrid(steps, s.time))),
+    saveRhythm: (name, text) => {
+      const r = saveRhythmAsPattern(song, ids, name, text);
+      edit(() => r.song);
+    },
     setRepeatStart: (on) => ids[0] && edit((s) => updateBar(s, ids[0]!, { repeatStart: on ? true : undefined })),
     setRepeatEnd: (on) => ids[0] && edit((s) => updateBar(s, ids[ids.length - 1]!, { repeatEnd: on ? { times: 2 } : undefined })),
     setRepeat: (on) => edit((s) => setRepeat(s, ids, on)),
@@ -298,8 +305,8 @@ export function App() {
                 setSel((cur) => (extend && cur ? { anchor: cur.anchor, focus: id } : { anchor: id, focus: id }));
               }}
               onOpen={onOpen}
-              chordText={chordText}
-              onCommitChords={onCommitChords}
+              cellsOf={cellsOf}
+              onCommitCells={onCommitCells}
               onCancelEntry={() => setEntry(null)}
               onEditMeta={setMeta}
               onCommitMeta={(which, v) => {
@@ -310,7 +317,7 @@ export function App() {
             />
           )}
         </main>
-        <Inspector song={song} ids={ids} chordsText={sel ? chordText(sel.focus) : ""} focusCue={focusCue} onCueFocused={() => setFocusCue(null)} a={actions} />
+        <Inspector song={song} ids={ids} chordsText={sel ? chordText(sel.focus) : ""} steps={focusRhythm} focusCue={focusCue} onCueFocused={() => setFocusCue(null)} a={actions} />
       </div>
     </div>
   );

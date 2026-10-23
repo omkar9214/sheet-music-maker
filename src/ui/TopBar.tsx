@@ -5,7 +5,9 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { KEYS, keyName, sameKey, type Key } from "../core/pitch";
-import { parsePattern, type Pattern } from "../core/rhythm";
+import { STEP_TICKS, beatEvents, eventsText, gridFromEvents, parsePattern, stepCounts, textFromGrid, type Pattern } from "../core/rhythm";
+import { beatTicks } from "../core/ticks";
+import { RhythmGrid } from "./RhythmGrid";
 import type { Clef, Song } from "../core/song";
 import { TIME_SIGS, type TimeSig } from "../core/ticks";
 import type { ChartStore } from "./store";
@@ -164,36 +166,35 @@ export function TopBar(props: {
 }
 
 /** The song's own patterns. Each is checked against the meter as it is typed (non-negotiable 1). */
+/**
+ * The song's own patterns, each as the same step grid as the inspector's (decision 6). Editing one
+ * here changes every bar that uses it. A pattern that doesn't fit the meter says so, and its grid
+ * starts from beat slashes (non-negotiable 1: never drawn overfull).
+ */
 function PatternsPanel({ song, onChange }: { song: Song; onChange: (p: Pattern[]) => void }) {
   const own = song.patterns.filter((p) => p.text !== "");
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const update = (id: string, patch: Partial<Pattern>) =>
     onChange(own.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  const counts = stepCounts(song.time);
+  const beatSteps = beatTicks(song.time) / STEP_TICKS;
   return (
     <div className="patterns-panel">
-      {song.patterns.filter((p) => p.text === "").map((p) => (
-        <div key={p.id} className="pattern-row builtin">
-          <span className="pname">{p.name}</span>
-        </div>
-      ))}
       {own.map((p) => {
-        const draft = drafts[p.id] ?? p.text;
-        const check = parsePattern(draft, song.time);
+        const parsed = parsePattern(p.text, song.time);
+        const steps = (parsed.ok ? gridFromEvents(parsed.events, song.time) : null) ?? gridFromEvents(beatEvents(song.time), song.time)!;
         return (
           <div key={p.id} className="pattern-row">
-            <input className="pname" value={p.name} onChange={(e) => update(p.id, { name: e.target.value })} />
-            <input
-              className={check.ok ? "ptext" : "ptext invalid"}
-              value={draft}
-              spellCheck={false}
-              onChange={(e) => {
-                const v = e.target.value;
-                setDrafts((d) => ({ ...d, [p.id]: v }));
-                if (parsePattern(v, song.time).ok) update(p.id, { text: v });
-              }}
-            />
-            <span className="perr">{check.ok ? "" : check.error}</span>
-            <button className="x" title="Delete" onClick={() => onChange(own.filter((x) => x.id !== p.id))}>×</button>
+            <div className="pattern-head">
+              <input
+                className="pname"
+                defaultValue={p.name}
+                onBlur={(e) => e.target.value.trim() && e.target.value !== p.name && update(p.id, { name: e.target.value.trim() })}
+                onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+              />
+              {!parsed.ok && <span className="perr">doesn't fit {song.time.beats}/{song.time.unit}</span>}
+              <button className="x" title="Delete" onClick={() => onChange(own.filter((x) => x.id !== p.id))}>×</button>
+            </div>
+            <RhythmGrid steps={steps} counts={counts} beatSteps={beatSteps} onChange={(st) => update(p.id, { text: textFromGrid(st, song.time) })} />
           </div>
         );
       })}
@@ -201,7 +202,7 @@ function PatternsPanel({ song, onChange }: { song: Song; onChange: (p: Pattern[]
         className="chip"
         onClick={() => {
           const id = `p${Date.now().toString(36)}`;
-          onChange([...own, { id, name: `Pattern ${own.length + 1}`, text: Array(song.time.beats).fill(String(song.time.unit)).join(" ") }]);
+          onChange([...own, { id, name: `Pattern ${own.length + 1}`, text: eventsText(beatEvents(song.time)) }]);
         }}
       >
         + Pattern

@@ -9,7 +9,7 @@
  * is B♯ (non-negotiable 2).
  */
 import { accidentalBetween, mod, pcOf, readSpelled, spelledText, type Key, type Spelled } from "./pitch";
-import { barTicks, beatTicks, type TimeSig } from "./ticks";
+import { PPQ, barTicks, beatTicks, type TimeSig } from "./ticks";
 
 export interface Degree {
   /** Letters above the tonic letter, 0–6. */
@@ -142,7 +142,49 @@ export function barText(chords: readonly BarChord[], key: Key, ts: TimeSig): str
 export function chordSpans(chords: readonly BarChord[], ts: TimeSig): number[] {
   const total = barTicks(ts);
   if (chords.length === 0) return [total];
-  return chords.map((c, i) => (chords[i + 1]?.tick ?? total) - c.tick);
+  const spans = chords.map((c, i) => (chords[i + 1]?.tick ?? total) - c.tick);
+  // A bar whose first chord is on beat 2 (the previous chord carries on, decision 6) still fills
+  // its first beat with a slash, or the bar would be drawn short.
+  return chords[0]!.tick > 0 ? [chords[0]!.tick, ...spans] : spans;
+}
+
+/*
+ * Beat cells (decision 6). Omkar: *"chord adding logic is weird"*. Typing `A . . E` and having the
+ * token count decide the beats was invisible arithmetic. Now a bar is shown as one cell per beat,
+ * as iReal Pro shows four spaces per bar, and a chord is typed into the cell for its beat. An empty
+ * cell means the chord before carries on, including an empty beat 1, which carries on the previous
+ * bar's chord.
+ */
+
+/** A bar's chords as cells: one per beat, or one per half-beat if any chord sits between beats. */
+export function chordCells(chords: readonly BarChord[], key: Key, ts: TimeSig): { cells: string[]; cellTicks: number } {
+  const total = barTicks(ts);
+  let cellTicks = beatTicks(ts);
+  if (chords.some((c) => c.tick % cellTicks !== 0)) cellTicks /= 2;
+  if (chords.some((c) => c.tick % cellTicks !== 0)) cellTicks = PPQ / 4;
+  const cells = Array.from({ length: total / cellTicks }, () => "");
+  for (const c of chords) cells[c.tick / cellTicks] = barChordText(c, key);
+  return { cells, cellTicks };
+}
+
+export type CellsParse = { ok: true; chords: BarChord[] } | { ok: false; cell: number; error: string };
+
+/** The inverse. `%` alone in the first cell repeats `prev`; `NC` is N.C.; an empty cell holds. */
+export function chordsFromCells(cells: readonly string[], cellTicks: number, key: Key, prev: readonly BarChord[] = []): CellsParse {
+  const filled = cells.map((c) => c.trim());
+  if (filled[0] === "%" && filled.slice(1).every((c) => c === "")) return { ok: true, chords: prev.map((c) => ({ ...c })) };
+  const chords: BarChord[] = [];
+  for (const [i, t] of filled.entries()) {
+    if (t === "") continue;
+    if (/^n\.?c\.?$/i.test(t)) {
+      chords.push({ tick: i * cellTicks, chord: null });
+      continue;
+    }
+    const c = parseChord(t, key);
+    if (!c) return { ok: false, cell: i, error: `"${t}" is not a chord` };
+    chords.push({ tick: i * cellTicks, chord: c });
+  }
+  return { ok: true, chords };
 }
 
 export function sameChord(a: Chord | null, b: Chord | null): boolean {

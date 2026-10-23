@@ -7,6 +7,75 @@ Extra users particular to this product: **the transcriber**, who already has the
 head or on paper and is copying it in at speed; **the arranger**, who changes things in rehearsal;
 **the band reader**, who only ever sees the printout.
 
+## Chords on beats, rhythm by clicking — decision 6 (2026-10-23)
+
+He said: *"Need to be able to change the rhythm, and chord adding logic is weird."* The weirdness
+was invisible arithmetic: the number of typed tokens decided the beats (`A . . E`), and beat 2 alone
+was impossible. Rhythm was a fixed stamp, or a duration string typed in a hidden popover.
+
+The design: **the bar's beats are boxes.** Chords go into beat cells (1 2 3 4), and the strum is a
+row of 16th-note steps under the same beats, counted "1 e & a". This borrows iReal Pro's four spaces
+per bar, Dorico's Space-to-next-beat, and a drum machine's step grid. The chord cells pop up at the
+bar being edited. The rhythm grid lives in the inspector, because it applies to the whole selection.
+
+Extra users here: **the strummer**, who thinks in "down down up" and counts "1 & 2 &", not in note
+values. **The reader**, who must get standard notation however the grid was clicked.
+
+### Chord entry
+- **Transcriber · one chord per bar** → type `b`, and the cells open on the bar with beat 1 holding
+  "b". Type `maj7`, then Enter, and the next bar opens on beat 1. [built]
+- **· two chords, beats 1 and 3** → `Bmaj7`, Space, Space, `C#m11`, Enter. Space moves one beat,
+  and the cell under the cursor is outlined. [built]
+- **· chord on beat 4 only, or beat 2 only** → Space to that cell and type. An empty first beat is
+  allowed: the previous bar's chord carries on, as in iReal Pro. [built]
+- **· back a beat** → Shift+Space, or ⌫ in an empty cell. ←/→ at the edge of a cell's text also
+  move. [built]
+- **· mouse user** → click a cell to put the cursor there. Suggestions drop under the active cell,
+  and clicking one fills it. [built]
+- **· edits a bar that already has chords** → Enter or double-click opens the cells with them in
+  place, the active one selected. Typing a letter over a selected bar replaces its chords, as a
+  spreadsheet cell does. [built]
+- **· typo in beat 3** → that cell turns red, the bar is not stored, and the cursor goes to the
+  cell. The other cells keep what was typed. [built]
+- **· `%` in beat 1, the rest empty** → copies the previous bar. [built]
+- **· changes his mind** → Esc leaves the bar as it was. [built]
+- **· 6/8 or 3/4** → 2 or 3 cells: as many as the meter has beats. [built]
+- **· a chord on the "and"** → not on beat cells. A bar already holding one (from old data) opens with
+  8th-note cells so nothing is hidden. [built; open: whether he needs pushes]
+- **· a bar whose chords start on beat 2, rhythm Slashes** → the first slash covers beat 1 with no
+  chord over it. Nothing is lost or drawn wrong. [built]
+
+### Rhythm
+- **Strummer · sees the strum** → the inspector shows the selected bar's rhythm as 16 steps under
+  "1 e & a 2 e & a …". ▮ is a strum, ━ lets it ring, and · is silence. [built]
+- **· changes one strum** → click a step: ring → strum → silence → ring. The bar on the page
+  redraws at once, and each click is one undo step. [built]
+- **· changes the strum for one bar only** → select that bar and click. Only that bar changes (its
+  own rhythm). The chips show none of the named patterns as on, and "Custom" is shown. [built]
+- **· wants that new strum elsewhere** → "Save as pattern" names it. It becomes a chip, and the
+  bars it came from use it. [built]
+- **· changes the strum for the whole chorus** → click the section in Form (all its bars are
+  selected), then click steps. Every selected bar gets the rhythm. [built]
+- **· changes "Strum" everywhere it is used** → the Patterns menu shows each pattern as the same
+  grid. Editing there changes every bar that uses it. [built]
+- **· goes back to the pattern** → click the pattern's chip. The bar's own rhythm is dropped. [built]
+- **· selection with mixed rhythms** → the grid shows the focus bar's rhythm, and the chip row shows
+  none as on. A click applies the result to all selected bars. [built]
+- **· clicks steps that make an odd length** (a strum that rings 5 sixteenths) → it is notated
+  as a tied pair (quarter tied to 16th), never as an impossible value. The tie is drawn. [built]
+- **· all silence** → a whole-bar rest. [built]
+- **· starts the bar silent** → the steps before the first strum are rests. [built]
+- **Reader · rests** → rests are split at the beats, except a whole-bar rest and half rests on beats 1 or 3 in 4/4. This
+  is the convention as remembered from Gould's *Behind Bars* on rests, not checked against the
+  book. [built]
+- **· his Strum, re-clicked to the same shape** → the notation is identical to his PDF:
+  `8 8 r16 8 8 8 r16 4`. [built, tested]
+- **· his Choke edited** → its rests renotate by the beat rule as r16 r8 r4. The PDF has r8 r16 r4,
+  which is MuseScore's spelling, not the textbook one. [built; noted]
+- **· Slashes bar clicked in the grid** → the grid starts from what the bar draws (one long note
+  per chord), and the bar becomes its own rhythm. [built]
+- **· 6/8, 3/4, 12/8** → 12, 12 and 24 steps, grouped by beat. 12/8 wraps to two rows. [built]
+
 ## Redesign — decision 5 (2026-10-23)
 
 He found the first editor clunky: *"clicking the bar opens chords and chord area also opens
@@ -152,6 +221,17 @@ open and advances), and spreadsheets (click selects, typing replaces, Enter edit
   below legibility. [built]
 
 ## What walking it found
+
+Decision 6:
+
+- **A typed first letter was overwritten.** `e` then `maj9` gave "maj9": React runs effects twice in
+  development, and a ref flipped inside the focus effect made the second run select the letter. The
+  caret rule is now state, so the effect is idempotent.
+- **"16 8." was split and tied** although it sits inside one beat. A writable value inside one beat
+  now stays single. Test: "a strum ringing 5 sixteenths is written tied" now also covers the dotted
+  8th on the "e".
+- **Two test expectations were wrong, not the code.** A quarter on the "&" of 2 crosses the middle of
+  a 4/4 bar, and tying it is the textbook writing.
 
 Decision 5's redesign:
 

@@ -15,7 +15,8 @@ import {
   STAFF_H, TEXT_FONT, TITLE_BASELINE, VOLTA_ROW,
 } from "./engrave/metrics";
 import { Notation } from "./engrave/Notation";
-import { currentToken, replaceToken, suggest } from "./suggest";
+import { beatTicks } from "../core/ticks";
+import { suggest } from "./suggest";
 
 /**
  * Screen pixels per point. 1.3 makes the page 796 px wide, so the Form panel, the page and the
@@ -41,9 +42,9 @@ interface Props {
   editingMeta: "title" | "source" | null;
   onPress: (barId: string, extend: boolean) => void;
   onOpen: (barId: string, zone: Zone) => void;
-  chordText: (barId: string) => string;
-  /** Returns an error to keep the box open, or null once stored. */
-  onCommitChords: (barId: string, value: string, move: 1 | -1 | 0) => string | null;
+  cellsOf: (barId: string) => { cells: string[]; cellTicks: number };
+  /** Returns the cell in error to keep the boxes open, or null once stored. */
+  onCommitCells: (barId: string, cells: string[], cellTicks: number, move: 1 | -1 | 0) => { cell: number; text: string } | null;
   onCancelEntry: () => void;
   onEditMeta: (which: "title" | "source" | null) => void;
   onCommitMeta: (which: "title" | "source", value: string) => void;
@@ -71,56 +72,99 @@ function locate(pages: PageLayout[], id: string) {
   return null;
 }
 
-function ChordEntry(props: {
+/**
+ * Chord entry as beat cells (decision 6): *"chord adding logic is weird"*. A bar opens as one box
+ * per beat, numbered, like iReal Pro's four spaces. Space steps to the next beat (Dorico), Enter or
+ * Tab stores the bar and moves to the next one. An empty box means the chord before carries on. It
+ * opens under the bar, so the bar being edited stays in view.
+ */
+function ChordCells(props: {
   song: Song;
-  initial: string;
-  selectAll: boolean;
+  initial: { cells: string[]; cellTicks: number };
+  seed?: string;
+  beatTicks: number;
   left: number;
   top: number;
-  width: number;
-  onCommit: (value: string, move: 1 | -1 | 0) => string | null;
+  onCommit: (cells: string[], cellTicks: number, move: 1 | -1 | 0) => { cell: number; text: string } | null;
   onCancel: () => void;
 }) {
-  const [value, setValue] = useState(props.initial);
-  const [err, setErr] = useState<string | null>(null);
+  const [cells, setCells] = useState<string[]>(() =>
+    props.seed !== undefined ? props.initial.cells.map((_, i) => (i === 0 ? props.seed! : "")) : props.initial.cells,
+  );
+  const cellTicks = props.initial.cellTicks;
+  const [active, setActive] = useState(0);
+  const [err, setErr] = useState<{ cell: number; text: string } | null>(null);
   const [hi, setHi] = useState(-1);
-  const input = useRef<HTMLInputElement>(null);
+  const refs = useRef<Array<HTMLInputElement | null>>([]);
+  const box = useRef<HTMLDivElement>(null);
   const alive = useRef(true);
-  const token = currentToken(value);
+  // Caret after a typed first letter; select-all everywhere else. State, not a ref flipped inside
+  // the effect: React runs effects twice in development, and the second run selected the seed letter
+  // so "maj9" replaced the "e" (found driving it).
+  const [caretEnd, setCaretEnd] = useState(props.seed !== undefined);
+  const value = cells[active] ?? "";
   // A suggestion that only repeats what is typed is noise.
-  const list = suggest(props.song, token, 7).filter((t) => t !== token);
+  const list = suggest(props.song, value.trim(), 6).filter((t) => t !== value.trim());
 
-  // Mounted with its text and focused in the same commit, so no keystroke lands nowhere (the lost
-  // cue found while verifying decision 3's build).
   useLayoutEffect(() => {
     alive.current = true;
-    const el = input.current;
-    if (el) {
-      el.focus();
-      if (props.selectAll) el.select();
-      else el.setSelectionRange(el.value.length, el.value.length);
-    }
     return () => {
       alive.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => setHi(-1), [token]);
+  // The active box takes focus as it changes. Its text is selected when moved to, so typing
+  // replaces it; with a typed first letter the caret goes after it instead.
+  useLayoutEffect(() => {
+    const el = refs.current[active];
+    if (!el) return;
+    el.focus();
+    if (caretEnd) el.setSelectionRange(el.value.length, el.value.length);
+    else el.select();
+    setHi(-1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
-  const commit = (move: 1 | -1 | 0, v = value) => {
-    const e = props.onCommit(v, move);
-    setErr(e);
-    return e;
+  const go = (i: number) => {
+    setCaretEnd(false);
+    setActive(Math.max(0, Math.min(cells.length - 1, i)));
   };
-  const accept = (t: string) => {
-    const v = replaceToken(value, t);
-    setValue(v);
+  const set = (t: string) => {
+    setCells((c) => c.map((x, i) => (i === active ? t : x)));
     setErr(null);
     setHi(-1);
-    return v;
   };
-  const onKey = (ev: KeyboardEvent<HTMLInputElement>) => {
-    if (ev.key === "ArrowDown" && list.length) {
+  const commit = (move: 1 | -1 | 0, now = cells) => {
+    const e = props.onCommit(now, cellTicks, move);
+    setErr(e);
+    if (e) go(e.cell);
+    return e;
+  };
+  const accepted = () => {
+    if (hi < 0 || !list[hi]) return cells;
+    const now = cells.map((x, i) => (i === active ? list[hi]! : x));
+    setCells(now);
+    setHi(-1);
+    return now;
+  };
+
+  const onKey = (ev: KeyboardEvent<HTMLInputElement>, i: number) => {
+    const el = ev.currentTarget;
+    const atStart = el.selectionStart === 0 && el.selectionEnd === 0;
+    const atEnd = el.selectionStart === el.value.length;
+    if (ev.key === " ") {
+      ev.preventDefault();
+      accepted();
+      go(i + (ev.shiftKey ? -1 : 1));
+    } else if (ev.key === "Backspace" && el.value === "" && i > 0) {
+      ev.preventDefault();
+      go(i - 1);
+    } else if (ev.key === "ArrowRight" && atEnd && i < cells.length - 1) {
+      ev.preventDefault();
+      go(i + 1);
+    } else if (ev.key === "ArrowLeft" && atStart && i > 0) {
+      ev.preventDefault();
+      go(i - 1);
+    } else if (ev.key === "ArrowDown" && list.length) {
       ev.preventDefault();
       setHi((h) => Math.min(list.length - 1, h + 1));
     } else if (ev.key === "ArrowUp" && list.length) {
@@ -128,47 +172,59 @@ function ChordEntry(props: {
       setHi((h) => Math.max(-1, h - 1));
     } else if (ev.key === "Enter") {
       ev.preventDefault();
-      // A highlighted suggestion is taken into the box; otherwise Enter stores the bar and moves on.
-      if (hi >= 0 && list[hi]) accept(list[hi]!);
+      if (hi >= 0) accepted();
       else commit(ev.shiftKey ? -1 : 1);
     } else if (ev.key === "Tab") {
       ev.preventDefault();
-      const v = hi >= 0 && list[hi] ? accept(list[hi]!) : value;
-      commit(ev.shiftKey ? -1 : 1, v);
+      commit(ev.shiftKey ? -1 : 1, accepted());
     } else if (ev.key === "Escape") {
       ev.preventDefault();
       props.onCancel();
     }
   };
+
+  const perBeat = props.beatTicks / cellTicks;
+  const label = (i: number) => (i % perBeat === 0 ? String(i / perBeat + 1) : "&");
   return (
-    <div className="entry" style={{ left: props.left, top: props.top, width: props.width }}>
-      <input
-        ref={input}
-        className={err ? "entry-input invalid" : "entry-input"}
-        style={{ fontFamily: TEXT_FONT, fontSize: SIZE.chord * SCALE }}
-        value={value}
-        spellCheck={false}
-        autoComplete="off"
-        aria-label="Chords"
-        onChange={(e) => {
-          setValue(e.target.value);
-          setErr(null);
-        }}
-        onKeyDown={onKey}
-        onBlur={() => {
-          if (!alive.current) return;
-          if (commit(0) !== null) props.onCancel();
-        }}
-      />
+    <div
+      ref={box}
+      className="cells"
+      style={{ left: props.left, top: props.top }}
+      onBlur={(e) => {
+        // Leaving the whole box stores the bar; moving between its own boxes does not.
+        if (!alive.current || box.current?.contains(e.relatedTarget as Node | null)) return;
+        if (commit(0) !== null) props.onCancel();
+      }}
+    >
+      <div className="cells-row">
+        {cells.map((c, i) => (
+          <label key={i} className={`cell${i === active ? " on" : ""}${err?.cell === i ? " invalid" : ""}`}>
+            <span className="cell-beat">{label(i)}</span>
+            <input
+              ref={(el) => {
+                refs.current[i] = el;
+              }}
+              value={c}
+              spellCheck={false}
+              autoComplete="off"
+              aria-label={`Beat ${label(i)}`}
+              style={{ fontFamily: TEXT_FONT }}
+              onFocus={() => i !== active && setActive(i)}
+              onChange={(e) => set(e.target.value.replace(/\s+/g, ""))}
+              onKeyDown={(e) => onKey(e, i)}
+            />
+          </label>
+        ))}
+      </div>
       {err ? (
-        <div className="entry-error">{err}</div>
+        <div className="entry-error">{err.text}</div>
       ) : (
         list.length > 0 && (
-          <ul className="suggest" onMouseDown={(e) => e.preventDefault()}>
+          <ul className="suggest" style={{ marginLeft: active * 70 }} onMouseDown={(e) => e.preventDefault()}>
             {list.map((t, i) => (
               // mousemove, not mouseenter: the list opens under a resting pointer, and mouseenter
-              // then stole the highlight, so ↓ Enter took the second suggestion (found driving it).
-              <li key={t} className={i === hi ? "on" : ""} onMouseMove={() => hi !== i && setHi(i)} onClick={() => accept(t)}>
+              // then stole the highlight (decision 5's walk).
+              <li key={t} className={i === hi ? "on" : ""} onMouseMove={() => hi !== i && setHi(i)} onClick={() => set(t)}>
                 {t}
               </li>
             ))}
@@ -284,15 +340,15 @@ export function Sheet(props: Props) {
             </g>
           </svg>
           {at && at.page === p.index && entry && (
-            <ChordEntry
+            <ChordCells
               key={entry.barId}
               song={song}
-              initial={entry.seed ?? props.chordText(entry.barId)}
-              selectAll={entry.seed === undefined}
-              left={at.b.x * SCALE}
-              top={(at.s.y - CHORD_ROW) * SCALE}
-              width={Math.max(at.b.w * SCALE, 150)}
-              onCommit={(v, move) => props.onCommitChords(entry.barId, v, move)}
+              initial={props.cellsOf(entry.barId)}
+              {...(entry.seed !== undefined ? { seed: entry.seed } : {})}
+              beatTicks={beatTicks(song.time)}
+              left={Math.min(at.b.x * SCALE, PAGE_W * SCALE - 300)}
+              top={(barColumn(at.s, at.b).y + barColumn(at.s, at.b).h) * SCALE + 2}
+              onCommit={(c, t, move) => props.onCommitCells(entry.barId, c, t, move)}
               onCancel={props.onCancelEntry}
             />
           )}

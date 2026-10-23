@@ -6,7 +6,10 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { Bar, Jump, Marker, Song } from "../core/song";
+import { STEP_TICKS, stepCounts, type Step } from "../core/rhythm";
 import { barPatternId, findBar } from "../core/song";
+import { beatTicks } from "../core/ticks";
+import { RhythmGrid } from "./RhythmGrid";
 
 const MARKERS: Array<[Marker, string]> = [["segno", "Segno"], ["coda", "Coda"]];
 const JUMPS: Array<[Jump, string]> = [
@@ -21,6 +24,8 @@ export interface InspectorActions {
   openChords: () => void;
   setCue: (which: "cueAbove" | "cueBelow", text: string) => void;
   setRhythm: (patternId: string) => void;
+  setSteps: (steps: Step[]) => void;
+  saveRhythm: (name: string, text: string) => void;
   setRepeatStart: (on: boolean) => void;
   setRepeatEnd: (on: boolean) => void;
   setRepeat: (on: boolean) => void;
@@ -76,10 +81,42 @@ function CueField(props: { label: string; value: string; focusKey: number; onFoc
   );
 }
 
+/** "Save as pattern": a name, then the rhythm becomes a chip for use elsewhere (decision 6). */
+function SavePattern({ onSave, count }: { onSave: (name: string) => void; count: number }) {
+  const [name, setName] = useState<string | null>(null);
+  if (name === null) {
+    return (
+      <button className="chip save" onClick={() => setName(`Pattern ${count - 1}`)}>
+        Save as pattern
+      </button>
+    );
+  }
+  const done = () => {
+    if (name.trim()) onSave(name.trim());
+    setName(null);
+  };
+  return (
+    <input
+      className="save-input"
+      autoFocus
+      value={name}
+      onFocus={(e) => e.target.select()}
+      onChange={(e) => setName(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") done();
+        if (e.key === "Escape") setName(null);
+      }}
+      onBlur={done}
+    />
+  );
+}
+
 export function Inspector(props: {
   song: Song;
   ids: readonly string[];
   chordsText: string;
+  /** The focus bar's rhythm as steps. */
+  steps: Step[] | null;
   focusCue: { which: "above" | "below"; n: number } | null;
   onCueFocused: () => void;
   a: InspectorActions;
@@ -103,6 +140,8 @@ export function Inspector(props: {
   const last = bars[bars.length - 1]!;
   const sectionName = song.sections[findBar(song, first.bar.id)!.section]!.name;
   const samePattern = bars.every((b) => b.pattern === first.pattern) ? first.pattern : null;
+  const noneOwn = bars.every((b) => !b.bar.rhythm);
+  const sameOwn = first.bar.rhythm && bars.every((b) => b.bar.rhythm === first.bar.rhythm) ? first.bar.rhythm : null;
 
   return (
     <aside className="inspector">
@@ -121,13 +160,20 @@ export function Inspector(props: {
         </>
       )}
 
-      <div className="row">
-        <span className="lbl">Rhythm</span>
-        <div className="chips">
-          {song.patterns.map((p) => (
-            <Chip key={p.id} on={samePattern === p.id} onClick={() => a.setRhythm(p.id)}>{p.name}</Chip>
-          ))}
+      <div className="rhythm-block">
+        <div className="row">
+          <span className="lbl">Rhythm</span>
+          <div className="chips">
+            {song.patterns.map((p) => (
+              <Chip key={p.id} on={noneOwn && samePattern === p.id} onClick={() => a.setRhythm(p.id)}>{p.name}</Chip>
+            ))}
+            {sameOwn && <span className="chip on custom">Custom</span>}
+          </div>
         </div>
+        {props.steps && (
+          <RhythmGrid steps={props.steps} counts={stepCounts(song.time)} beatSteps={beatTicks(song.time) / STEP_TICKS} onChange={a.setSteps} />
+        )}
+        {sameOwn && <SavePattern onSave={(name) => a.saveRhythm(name, sameOwn)} count={song.patterns.length} />}
       </div>
 
       <div className="row">

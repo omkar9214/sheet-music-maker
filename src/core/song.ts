@@ -2,7 +2,7 @@
  * The chart, as data (non-negotiable 3). Every edit is a pure function from Song to Song, so undo
  * is a stack of values and the page is always compiled from one of them.
  */
-import { parseBar, rekeyChord, type BarChord } from "./chord";
+import { chordsFromCells, parseBar, rekeyChord, type BarChord } from "./chord";
 import { KEYS, sameKey, type Key } from "./pitch";
 import { builtinPatterns, starterPatterns, SLASHES_ID, type Pattern } from "./rhythm";
 import { barTicks, beatTicks, type TimeSig } from "./ticks";
@@ -17,6 +17,9 @@ export interface Bar {
   chords: BarChord[];
   /** Overrides the section's pattern. */
   pattern?: string;
+  /** This bar's own rhythm, as pattern text, clicked in the step grid (decision 6). Wins over any
+   * pattern. */
+  rhythm?: string;
   /** Boxed, above the staff: "Vocal 1 Enters". */
   cueAbove?: string;
   /** Plain, below the staff: "Band Enters - Vocal 1, …". */
@@ -360,7 +363,7 @@ export function setBarCount(song: Song, sectionId: string, n: number): Song {
 
 /** What ⌘C takes: each bar's chords, rhythm and cues, but not its repeat signs or endings. Those
  * belong to where a bar sits in the form, not to its music. */
-export type BarClip = Pick<Bar, "chords" | "pattern" | "cueAbove" | "cueBelow">;
+export type BarClip = Pick<Bar, "chords" | "pattern" | "rhythm" | "cueAbove" | "cueBelow">;
 
 export function copyBars(song: Song, ids: readonly string[]): BarClip[] {
   return ids.flatMap((id) => {
@@ -371,6 +374,7 @@ export function copyBars(song: Song, ids: readonly string[]): BarClip[] {
     // The rhythm the bar draws, not only its override: Melody's slashes pasted into a strummed
     // Chorus came out strummed when only overrides were copied (found driving it).
     const clip: BarClip = { chords: structuredClone(b.chords), pattern: barPatternId(sec, b) };
+    if (b.rhythm) clip.rhythm = b.rhythm;
     if (b.cueAbove) clip.cueAbove = b.cueAbove;
     if (b.cueBelow) clip.cueBelow = b.cueBelow;
     return [clip];
@@ -390,10 +394,65 @@ export function pasteBars(song: Song, startId: string, clips: readonly BarClip[]
         chords: structuredClone(clips[k]!.chords),
         // An override only where the destination section would draw something else.
         pattern: clips[k]!.pattern === s.sections[findBar(s, id)!.section]!.pattern ? undefined : clips[k]!.pattern,
+        rhythm: clips[k]!.rhythm,
         cueAbove: clips[k]!.cueAbove,
         cueBelow: clips[k]!.cueBelow,
       }),
     song,
   );
   return { song: next, ids: target };
+}
+
+/**
+ * The step grid's result for the selected bars (decision 6). If the clicked rhythm is exactly a
+ * named pattern, the bars use that pattern, as if its chip had been pressed. Otherwise each bar gets
+ * it as its own rhythm. Either way the bars' other rhythm settings go, so what is drawn is what was
+ * clicked.
+ */
+export function setBarsRhythm(song: Song, ids: readonly string[], text: string): Song {
+  const named = song.patterns.find((p) => p.text !== "" && p.text === text);
+  return ids.reduce((s, id) => {
+    const r = findBar(s, id);
+    if (!r) return s;
+    const sec = s.sections[r.section]!;
+    if (named) return updateBar(s, id, { rhythm: undefined, pattern: named.id === sec.pattern ? undefined : named.id });
+    return updateBar(s, id, { rhythm: text });
+  }, song);
+}
+
+/** A pattern chip: the bars use the pattern and drop any rhythm of their own. A whole section
+ * selected sets the section's pattern instead, with no overrides. */
+export function setBarsPattern(song: Song, ids: readonly string[], patternId: string): Song {
+  const chosen = new Set(ids);
+  let out = song;
+  for (const sec of song.sections) {
+    const mine = sec.bars.filter((b) => chosen.has(b.id)).map((b) => b.id);
+    if (mine.length === 0) continue;
+    if (mine.length === sec.bars.length) {
+      out = updateSection(out, sec.id, { pattern: patternId });
+      out = updateBars(out, mine, { pattern: undefined, rhythm: undefined });
+    } else {
+      out = updateBars(out, mine, { pattern: patternId === sec.pattern ? undefined : patternId, rhythm: undefined });
+    }
+  }
+  return out;
+}
+
+/** "Save as pattern": the bars' own rhythm becomes a named pattern, and they use it. */
+export function saveRhythmAsPattern(song: Song, ids: readonly string[], name: string, text: string): { song: Song; id: string } {
+  const id = newId("p");
+  const withPattern: Song = { ...song, patterns: [...song.patterns, { id, name, text }] };
+  return { song: setBarsRhythm(withPattern, ids, text), id };
+}
+
+/** Editing a named pattern in the Patterns menu changes every bar that uses it. */
+export function updatePatternText(song: Song, id: string, text: string): Song {
+  return { ...song, patterns: song.patterns.map((p) => (p.id === id ? { ...p, text } : p)) };
+}
+
+export function setBarCells(song: Song, barId: string, cells: readonly string[], cellTicks: number): { song: Song; error?: { cell: number; text: string } } {
+  const prev = previousBar(song, barId)?.chords ?? [];
+  const p = chordsFromCells(cells, cellTicks, song.key, prev);
+  if (!p.ok) return { song, error: { cell: p.cell, text: p.error } };
+  return { song: updateBar(song, barId, { chords: p.chords }) };
 }

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { barText, chordText, diatonicChords, parseBar, parseChord } from "./chord";
+import { barText, chordCells, chordSpans, chordText, chordsFromCells, diatonicChords, parseBar, parseChord } from "./chord";
 import { khwabon } from "./khwabon";
 import { KEYS, fifths, keyName, readSpelled, type Key } from "./pitch";
-import { barRhythm, beamGroups, parsePattern, starterPatterns } from "./rhythm";
-import { allBars, barRange, copyBars, duplicateSection, pasteBars, setBarCount, setBarText, setKeyKeepChords, setRepeat, setTime, toggleEnding, transpose, updateSection, type Song } from "./song";
+import { barRhythm, beamGroups, gridFromEvents, parsePattern, starterPatterns, stepCounts, textFromGrid, type Step } from "./rhythm";
+import { allBars, barRange, copyBars, duplicateSection, pasteBars, setBarCount, setBarText, setKeyKeepChords, saveRhythmAsPattern, setBarsPattern, setBarsRhythm, setRepeat, setTime, toggleEnding, transpose, updateSection, type Song } from "./song";
 import { PPQ, barTicks } from "./ticks";
 
 const key = (name: string, mode: "major" | "minor" = "major"): Key => {
@@ -264,5 +264,119 @@ describe("range edits — decision 5", () => {
     expect(setBarCount(song, id, 6).sections[0]!.bars.length).toBe(6);
     expect(setBarCount(song, id, 2).sections[0]!.bars.map((b) => b.id)).toEqual(intro.slice(0, 2));
     expect(setBarCount(song, id, 0).sections[0]!.bars.length).toBe(1);
+  });
+});
+
+describe("step grid — decision 6", () => {
+  const steps = (s: string): Step[] => [...s].map((c) => (c === "x" ? "hit" : c === "-" ? "hold" : "rest"));
+  const show = (g: Step[] | null) => g?.map((x) => (x === "hit" ? "x" : x === "hold" ? "-" : ".")).join("");
+
+  it("his Strum is the grid x-x-.x-x-x-.x--- and comes back as the PDF wrote it", () => {
+    const strum = parsePattern("8 8 r16 8 8 8 r16 4", T44);
+    const g = strum.ok ? gridFromEvents(strum.events, T44) : null;
+    expect(show(g)).toBe("x-x-.x-x-x-.x---");
+    expect(textFromGrid(g!, T44)).toBe("8 8 r16 8 8 8 r16 4");
+  });
+
+  it("his Choke round-trips as a grid; its rests come back by the beat rule", () => {
+    const choke = parsePattern("8 8 r16 8 8 r8 r16 r4", T44);
+    const g = choke.ok ? gridFromEvents(choke.events, T44)! : [];
+    expect(show(g)).toBe("x-x-.x-x-.......");
+    expect(textFromGrid(g, T44)).toBe("8 8 r16 8 8 r16 r8 r4");
+    const again = parsePattern(textFromGrid(g, T44), T44);
+    expect(again.ok && show(gridFromEvents(again.events, T44))).toBe(show(g));
+  });
+
+  it("every grid round-trips: grid → notation → grid is the identity (all 3^8 two-beat grids)", () => {
+    // Exhaustive over the first half bar with the second half fixed, so the mapping is asserted,
+    // not sampled (§9.12). 6561 cases.
+    const kinds: Step[] = ["hit", "hold", "rest"];
+    for (let n = 0; n < 3 ** 8; n++) {
+      const g: Step[] = [];
+      let k = n;
+      for (let i = 0; i < 8; i++) {
+        g.push(kinds[k % 3]!);
+        k = Math.floor(k / 3);
+      }
+      g.push(...steps("x---x-x-"));
+      const text = textFromGrid(g, T44);
+      const back = parsePattern(text, T44);
+      expect(back.ok, text).toBe(true);
+      const normal = g.map((x, i) => (x === "hold" && (i === 0 || g.slice(0, i).every((y) => y !== "hit") || g.slice(0, i).reverse().find((y) => y !== "hold") === "rest") ? "rest" : x));
+      expect(show(gridFromEvents(back.ok ? back.events : [], T44)), text).toBe(show(normal));
+    }
+  });
+
+  it("a strum ringing 5 sixteenths is written tied, never as an impossible value", () => {
+    expect(textFromGrid(steps("x----x--x---x---"), T44)).toBe("4~ 16 8. 4 4");
+    // A quarter on the "&" of 2 crosses the middle of the bar, so it is tied (Gould: show beat 3).
+    expect(textFromGrid(steps("x-----x---x---x-"), T44)).toBe("4. 8~ 8 4 8");
+  });
+
+  it("silence is a whole-bar rest; a bar starting silent starts with rests by the beat", () => {
+    expect(textFromGrid(steps("................"), T44)).toBe("r1");
+    expect(textFromGrid(steps("......x---x---x-"), T44)).toBe("r4 r8 8~ 8 4 8");
+  });
+
+  it("counts read 1 e & a, and 6/8 counts 1 & a 2 & a", () => {
+    expect(stepCounts(T44).slice(0, 5)).toEqual(["1", "e", "&", "a", "2"]);
+    expect(stepCounts({ beats: 6, unit: 8 }).filter(Boolean)).toEqual(["1", "&", "a", "2", "&", "a"]);
+  });
+});
+
+describe("chord cells — decision 6", () => {
+  it("a bar opens as one cell per beat, chords in their beats", () => {
+    const p = parseBar("Bmaj7 C#m11", B, T44);
+    expect(chordCells(p.ok ? p.chords : [], B, T44)).toEqual({ cells: ["Bmaj7", "", "C♯m11", ""], cellTicks: PPQ });
+  });
+
+  it("cells back to chords: beat 4 alone, beat 2 alone, % and NC", () => {
+    const r = chordsFromCells(["A", "", "", "E"], PPQ, B);
+    expect(r.ok && r.chords.map((c) => c.tick)).toEqual([0, 3 * PPQ]);
+    const two = chordsFromCells(["", "E", "", ""], PPQ, B);
+    expect(two.ok && two.chords.map((c) => c.tick)).toEqual([PPQ]);
+    const prev = parseBar("Bmaj7", B, T44);
+    const pct = chordsFromCells(["%", "", "", ""], PPQ, B, prev.ok ? prev.chords : []);
+    expect(pct.ok && pct.chords.length).toBe(1);
+    expect(chordsFromCells(["A", "", "H7", ""], PPQ, B)).toEqual({ ok: false, cell: 2, error: '"H7" is not a chord' });
+  });
+
+  it("a chord between beats opens 8th-note cells so it is not hidden", () => {
+    const off = chordsFromCells(["A", "", "", "", "", "", "", "E"], PPQ / 2, B);
+    expect(chordCells(off.ok ? off.chords : [], B, T44).cells.length).toBe(8);
+  });
+
+  it("Slashes still fill the bar when the first chord is on beat 2", () => {
+    const r = chordsFromCells(["", "E", "", ""], PPQ, B);
+    expect(chordSpans(r.ok ? r.chords : [], T44)).toEqual([PPQ, 3 * PPQ]);
+  });
+});
+
+describe("rhythm edits on bars — decision 6", () => {
+  const song = khwabon();
+  const intro = song.sections[0]!.bars.map((b) => b.id);
+
+  it("a clicked rhythm equal to a pattern uses the pattern; anything else is the bar's own", () => {
+    const same = setBarsRhythm(song, [intro[0]!], "8 8 r16 8 8 8 r16 4");
+    expect(same.sections[0]!.bars[0]!.rhythm).toBeUndefined();
+    const own = setBarsRhythm(song, [intro[0]!], "4 4 4 4");
+    expect(own.sections[0]!.bars[0]!.rhythm).toBe("4 4 4 4");
+    expect(own.sections[0]!.bars[1]!.rhythm).toBeUndefined();
+  });
+
+  it("a chip drops the bar's own rhythm; a whole section sets the section", () => {
+    const own = setBarsRhythm(song, intro, "4 4 4 4");
+    const back = setBarsPattern(own, intro, "choke");
+    expect(back.sections[0]!.pattern).toBe("choke");
+    expect(back.sections[0]!.bars.every((b) => !b.rhythm && !b.pattern)).toBe(true);
+  });
+
+  it("save as pattern names it and the bars use it", () => {
+    const own = setBarsRhythm(song, [intro[1]!], "4 4 4 4");
+    const r = saveRhythmAsPattern(own, [intro[1]!], "Fours", "4 4 4 4");
+    const bar = r.song.sections[0]!.bars[1]!;
+    expect(bar.rhythm).toBeUndefined();
+    expect(bar.pattern).toBe(r.id);
+    expect(r.song.patterns.find((p) => p.id === r.id)!.name).toBe("Fours");
   });
 });

@@ -24,6 +24,7 @@ export interface EventLayout {
   x: number;
   ticks: number;
   rest: boolean;
+  tie?: boolean;
 }
 
 export interface ChordLayout {
@@ -140,7 +141,7 @@ interface Prepared {
 function prepare(song: Song, measure: Measure): Prepared[] {
   const total = barTicks(song.time);
   return allBars(song).map(({ bar, section, number, ref }) => {
-    const r = barRhythm(patternById(song, barPatternId(section, bar)), bar.chords, song.time);
+    const r = barRhythm(patternById(song, barPatternId(section, bar)), bar.chords, song.time, bar.rhythm);
     const starts = onsets(r.events);
     const natural: number[] = [];
     let acc = 0;
@@ -248,7 +249,7 @@ export function layoutSong(song: Song, measure: Measure): PageLayout[] {
       const w = p.leftPad + p.contentW * scale + p.rightPad;
       const contentX = x + p.leftPad;
       const starts = onsets(p.events);
-      const events = p.events.map((e, j) => ({ x: contentX + p.offs[j]! * scale, ticks: e.ticks, rest: e.rest }));
+      const events = p.events.map((e, j) => ({ x: contentX + p.offs[j]! * scale, ticks: e.ticks, rest: e.rest, tie: e.tie }));
       const chords = p.chordTexts.map((c) => ({
         x: contentX + offsetAt(c.tick, starts, p.offs, total, p.contentW) * scale,
         text: c.text,
