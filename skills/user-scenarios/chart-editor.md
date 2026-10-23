@@ -7,6 +7,36 @@ Extra users particular to this product: **the transcriber**, who already has the
 head or on paper and is copying it in at speed; **the arranger**, who changes things in rehearsal;
 **the band reader**, who only ever sees the printout.
 
+## Redesign — decision 5 (2026-10-23)
+
+He found the first editor clunky: *"clicking the bar opens chords and chord area also opens
+chords"*. The rows below marked **[superseded]** described the first design. They are kept so its
+reasoning can still be read. Borrowed from iReal Pro (one cursor on a measure, type the chord,
+Return moves on, selection-scoped barline/ending controls), Dorico/MuseScore (chord entry stays
+open and advances), and spreadsheets (click selects, typing replaces, Enter edits).
+
+- **Any · clicks a bar** → selects it, and nothing opens. Shift-click or ⇧←/→ extends to a range,
+  and ↑/↓ moves between systems. [built]
+- **Transcriber · enters chords** → with a bar selected, type the chord letter and the box opens
+  holding it. Enter/Tab stores the bar and opens the next one, and Esc stops. A short list of
+  suggestions narrows as you type: the song's chords by use, then the key's, then common
+  qualities. ↓ then Enter takes one. [built]
+- **· edits an existing bar** → Enter or double-click on the chord row opens it with its text
+  selected. [built]
+- **· same four bars again** → select them, ⌘C, then select the target and ⌘V. Chords, rhythm and
+  cues are pasted; repeat signs and endings are not, because they belong to the form. [built]
+- **· clears bars** → ⌫ clears the chords of the selection. [built]
+- **Arranger · repeats a passage** → select the bars, then press "|: 9–12 :|" once, and ×N
+  appears. [built]
+- **· 1st/2nd endings** → select the bars, then press 1. or 2. [built]
+- **· a whole section's rhythm** → click the section in Form to select all its bars, then pick the
+  rhythm. That sets the section's own rhythm, with no per-bar overrides. [built]
+- **· cues** → the Above/Below fields in the inspector for the selected bar. Double-clicking above
+  or below a bar on the page goes straight to that field. [built]
+- **· form** → the Form panel lists sections with their first bar number and bar count (− +).
+  Double-click renames; ↑ ↓ ⧉ × show on the row in use. "+ Verse" etc. add after the selected
+  section and open entry in its first bar. [built]
+
 ## Start
 
 - **First time · opens the app** — what is this, where do I type?
@@ -23,7 +53,7 @@ head or on paper and is copying it in at speed; **the arranger**, who changes th
 
 ## Chords (step 3)
 
-- **Transcriber · chord per bar, many bars** — the main loop.
+- **[superseded]** **Transcriber · chord per bar, many bars** — the main loop.
   → Click a bar and type `bmaj7`. Enter, or Tab, commits and moves to the next bar's chord box, and
   Shift+Tab moves back. Esc closes the box. 73 bars at about 4 s each is about 5 minutes. [built]
 - **· two chords in a bar** → `Bmaj7 C#m11` splits the bar evenly: beats 1 and 3 in 4/4. [built]
@@ -35,7 +65,7 @@ head or on paper and is copying it in at speed; **the arranger**, who changes th
   ♯/♭. [built]
 - **· typo / impossible chord** (`H7`, `C#m/Q`) → the box shows a red edge and refuses to commit.
   The bar keeps its old chords. Nothing is lost. [built]
-- **· doesn't know what to type** → the palette under the box. "In this song" lists the chords
+- **[superseded]** **· doesn't know what to type** → the palette under the box. "In this song" lists the chords
   already used, most used first. This is the fastest path once a song's 5–6 chords exist. "Key"
   lists the diatonic chords. "Quality" chips append to the current chord. Clicking a chip does not
   close the box. [built]
@@ -70,7 +100,7 @@ head or on paper and is copying it in at speed; **the arranger**, who changes th
 
 ## Cues (step 5)
 
-- **Transcriber · lots of cues** → every bar has a box above (boxed, like "Vocal 1 Enters") and a
+- **[superseded]** **Transcriber · lots of cues** → every bar has a box above (boxed, like "Vocal 1 Enters") and a
   line below (plain, like "Band Enters…"). They show as faint dashed boxes on the selected system
   and on hover, never in print. Click and type. Enter commits, and Tab goes to the same slot in the
   next bar. [built]
@@ -122,6 +152,18 @@ head or on paper and is copying it in at speed; **the arranger**, who changes th
   below legibility. [built]
 
 ## What walking it found
+
+Decision 5's redesign:
+
+- **The suggestion list opened under a resting pointer, and `mouseenter` stole the highlight.**
+  ↓ Enter then took the second suggestion. Now on `mousemove`.
+- **A spent focus request re-focused the Below field** every time a single bar was selected again,
+  so ⌘V and ⌫ typed into the field. Now one-shot.
+- **⌘V carried only rhythm overrides**, so Melody's slashes pasted into the strummed Chorus came out
+  strummed. Copy now carries the rhythm the bar draws. Test: "a pasted bar draws the rhythm it
+  drew where it was copied".
+
+Decision 3's build:
 
 - **Spacing broke the Intro 3 + 1** where the PDF has 4. Spacing tightened (1.2+2.0·√ → 1.1+1.9·√).
   Test: "fits four strum bars on a system", proven to fail on the old constants.

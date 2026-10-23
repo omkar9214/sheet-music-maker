@@ -3,7 +3,7 @@ import { barText, chordText, diatonicChords, parseBar, parseChord } from "./chor
 import { khwabon } from "./khwabon";
 import { KEYS, fifths, keyName, readSpelled, type Key } from "./pitch";
 import { barRhythm, beamGroups, parsePattern, starterPatterns } from "./rhythm";
-import { allBars, duplicateSection, setBarText, setKeyKeepChords, setTime, transpose, type Song } from "./song";
+import { allBars, barRange, copyBars, duplicateSection, pasteBars, setBarCount, setBarText, setKeyKeepChords, setRepeat, setTime, toggleEnding, transpose, updateSection, type Song } from "./song";
 import { PPQ, barTicks } from "./ticks";
 
 const key = (name: string, mode: "major" | "minor" = "major"): Key => {
@@ -207,5 +207,62 @@ describe("song edits", () => {
     const song = khwabon();
     const d = duplicateSection(song, song.sections[2]!.id)!;
     expect(d.section.name).toBe("Verse 4");
+  });
+});
+
+describe("range edits — decision 5", () => {
+  const song = khwabon();
+  const intro = song.sections[0]!.bars.map((b) => b.id);
+  const chorus = song.sections[1]!.bars.map((b) => b.id);
+
+  it("barRange crosses sections and works backwards", () => {
+    expect(barRange(song, intro[2]!, chorus[1]!)).toEqual([intro[2], intro[3], chorus[0], chorus[1]]);
+    expect(barRange(song, chorus[1]!, intro[2]!)).toEqual([intro[2], intro[3], chorus[0], chorus[1]]);
+  });
+
+  it("one repeat press puts |: on the first bar and :| on the last", () => {
+    const s = setRepeat(song, intro, true, 3);
+    const bars = s.sections[0]!.bars;
+    expect(bars.map((b) => [!!b.repeatStart, b.repeatEnd?.times ?? 0])).toEqual([[true, 0], [false, 0], [false, 0], [false, 3]]);
+    const off = setRepeat(s, intro, false);
+    expect(off.sections[0]!.bars.every((b) => !b.repeatStart && !b.repeatEnd)).toBe(true);
+  });
+
+  it("an ending toggles on for all, then off for all", () => {
+    const s = toggleEnding(song, intro.slice(0, 2), 1);
+    expect(s.sections[0]!.bars.map((b) => b.ending)).toEqual([[1], [1], undefined, undefined]);
+    const off = toggleEnding(s, intro.slice(0, 2), 1);
+    expect(off.sections[0]!.bars.every((b) => !b.ending)).toBe(true);
+  });
+
+  it("copy and paste carry chords, rhythm and cues, not repeat signs", () => {
+    const clip = copyBars(song, chorus.slice(0, 2));
+    const r = pasteBars(song, intro[0]!, clip);
+    const a = r.song.sections[0]!.bars[0]!;
+    expect(a.cueAbove).toBe("Vocal 1 Enters");
+    expect(a.repeatStart).toBeUndefined();
+    expect(r.ids).toEqual(intro.slice(0, 2));
+    // Pasting past the end stops at the last bar rather than inventing bars.
+    const last = allBars(song).at(-1)!.bar.id;
+    expect(pasteBars(song, last, clip).ids).toEqual([last]);
+  });
+
+  it("a pasted bar draws the rhythm it drew where it was copied", () => {
+    // Verse 1 bar 1 is a Slashes override in a Strum section; Intro is Strum.
+    const verse = song.sections[2]!.bars.map((b) => b.id);
+    const onto = updateSection(song, song.sections[0]!.id, { pattern: "slashes" });
+    const strum = copyBars(onto, [song.sections[1]!.bars[0]!.id]);
+    const r = pasteBars(onto, intro[0]!, strum);
+    expect(r.song.sections[0]!.bars[0]!.pattern).toBe("strum");
+    const slashes = copyBars(song, [verse[0]!]);
+    const r2 = pasteBars(onto, intro[1]!, slashes);
+    expect(r2.song.sections[0]!.bars[1]!.pattern).toBeUndefined();
+  });
+
+  it("bar count grows and shrinks at the end, never below one", () => {
+    const id = song.sections[0]!.id;
+    expect(setBarCount(song, id, 6).sections[0]!.bars.length).toBe(6);
+    expect(setBarCount(song, id, 2).sections[0]!.bars.map((b) => b.id)).toEqual(intro.slice(0, 2));
+    expect(setBarCount(song, id, 0).sections[0]!.bars.length).toBe(1);
   });
 });

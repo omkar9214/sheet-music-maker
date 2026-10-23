@@ -1,277 +1,323 @@
 /**
- * The chart is the editor: the pages are drawn as they print, and every slot can be typed into where
- * it sits. Omkar, decision 2: *"there's already text boxes wherever the space is"*. Empty slots show
- * as dashed boxes on the bar under the pointer and across the selected system. They are never
- * printed.
+ * The pages, drawn as they print, with one target per bar.
+ *
+ * Omkar, decision 5: *"clicking the bar opens chords and chord area also opens chords, and in
+ * genral its clunky"*. The first version had three overlapping targets per bar, and every click
+ * opened a box and a palette. Now a click **selects** (shift-click extends), as a measure does in
+ * iReal Pro and a cell does in a spreadsheet. Typing a chord letter, Enter or a double-click opens
+ * chord entry in the bar, and Enter/Tab carries it to the next bar, as Dorico's chord popover does.
  */
-import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { Song } from "../core/song";
-import { ChordPalette } from "./ChordPalette";
 import type { BarLayout, PageLayout, SystemLayout } from "./engrave/layout";
-import { BOX_H, CHORD_ROW, MARGIN_X, PAGE_H, PAGE_W, SIZE, SOURCE_BASELINE, STAFF_H, TEXT_FONT, TITLE_BASELINE } from "./engrave/metrics";
-import { Notation, boxBottom, labelBaseline } from "./engrave/Notation";
+import {
+  BELOW_BASELINE, BELOW_ROW, BOX_ROW, CHORD_ROW, MARGIN_X, PAGE_H, PAGE_W, SIZE, SOURCE_BASELINE,
+  STAFF_H, TEXT_FONT, TITLE_BASELINE, VOLTA_ROW,
+} from "./engrave/metrics";
+import { Notation } from "./engrave/Notation";
+import { currentToken, replaceToken, suggest } from "./suggest";
 
-/** Screen pixels per point. 1.45 makes the page 887 px wide: a letter page at a readable size on
- * a laptop. A narrower window scrolls rather than shrinking the page (non-negotiable 7). */
-export const SCALE = 1.45;
-/** Matches `.palette { width }` in styles.css. */
-const PALETTE_W = 430;
+/**
+ * Screen pixels per point. 1.3 makes the page 796 px wide, so the Form panel, the page and the
+ * inspector fit side by side on a 1366-px laptop. A narrower window scrolls rather than shrinking
+ * the page (non-negotiable 7).
+ */
+export const SCALE = 1.3;
 
-export type Slot = "chord" | "above" | "below";
-export type Editing =
-  | { kind: Slot; barId: string }
-  | { kind: "label"; sectionId: string }
-  | { kind: "title" }
-  | { kind: "source" };
+export type Zone = "above" | "chord" | "below";
 
-export interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-export function slotRect(s: SystemLayout, b: BarLayout, slot: Slot): Rect {
-  if (slot === "chord") return { x: b.x, y: s.y - CHORD_ROW + 2, w: b.w, h: CHORD_ROW - 3 };
-  if (slot === "above") {
-    const bottom = boxBottom(s, 0);
-    return { x: b.contentX, y: bottom - BOX_H, w: Math.max(b.x + b.w - b.contentX - 2, 40), h: BOX_H };
-  }
-  return { x: b.contentX, y: s.y + STAFF_H + 4, w: Math.max(b.x + b.w - b.contentX - 2, 40), h: 15 };
+export interface Entry {
+  barId: string;
+  /** Typed to open it: the box starts with this text. Absent: it starts with the bar's chords, selected. */
+  seed?: string;
 }
 
 interface Props {
   song: Song;
   pages: PageLayout[];
-  selected: string | null;
-  editing: Editing | null;
-  error: string | null;
-  onSelect: (barId: string | null) => void;
-  onEdit: (e: Editing | null) => void;
-  /** Closes `e` only if it is still the open slot. */
-  onClose: (e: Editing) => void;
-  /** Returns an error to keep the box open, or null when it was stored. */
-  onCommit: (e: Editing, value: string, move: 1 | -1 | 0) => string | null;
-  initialValue: (e: Editing) => string;
+  selected: ReadonlySet<string>;
+  focus: string | null;
+  entry: Entry | null;
+  editingMeta: "title" | "source" | null;
+  onPress: (barId: string, extend: boolean) => void;
+  onOpen: (barId: string, zone: Zone) => void;
+  chordText: (barId: string) => string;
+  /** Returns an error to keep the box open, or null once stored. */
+  onCommitChords: (barId: string, value: string, move: 1 | -1 | 0) => string | null;
+  onCancelEntry: () => void;
+  onEditMeta: (which: "title" | "source" | null) => void;
+  onCommitMeta: (which: "title" | "source", value: string) => void;
 }
 
-function find(pages: PageLayout[], barId: string): { s: SystemLayout; b: BarLayout; page: number } | null {
+/** A bar's whole column, from its highest row above to its lowest below: one target, no overlaps. */
+function barColumn(s: SystemLayout, b: BarLayout) {
+  const top = s.y - CHORD_ROW - (s.hasVolta ? VOLTA_ROW : 0) - s.boxRows * BOX_ROW - 2;
+  const bottom = s.y + STAFF_H + (s.belowRows ? BELOW_BASELINE + (s.belowRows - 1) * BELOW_ROW + 4 : 10);
+  return { x: b.x, y: top, w: b.w, h: bottom - top };
+}
+
+function zoneAt(s: SystemLayout, yPt: number): Zone {
+  if (yPt < s.y - CHORD_ROW - (s.hasVolta ? VOLTA_ROW : 0)) return "above";
+  if (yPt > s.y + STAFF_H + 3) return "below";
+  return "chord";
+}
+
+function locate(pages: PageLayout[], id: string) {
   for (const p of pages)
     for (const s of p.systems) {
-      const b = s.bars.find((x) => x.bar.id === barId);
-      if (b) return { s, b, page: p.index };
+      const b = s.bars.find((x) => x.bar.id === id);
+      if (b) return { page: p.index, s, b };
     }
   return null;
 }
 
-function editRect(pages: PageLayout[], e: Editing): { page: number; r: Rect; size: number } | null {
-  if (e.kind === "title") return { page: 0, r: { x: MARGIN_X + 80, y: TITLE_BASELINE - 22, w: PAGE_W - 2 * MARGIN_X - 160, h: 28 }, size: SIZE.title };
-  if (e.kind === "source") return { page: 0, r: { x: PAGE_W - MARGIN_X - 160, y: SOURCE_BASELINE - 12, w: 160, h: 16 }, size: SIZE.source };
-  if (e.kind === "label") {
-    for (const p of pages)
-      for (const s of p.systems)
-        if (s.sectionId === e.sectionId && s.label)
-          return { page: p.index, r: { x: MARGIN_X - 2, y: labelBaseline(s) - 14, w: 150, h: 19 }, size: SIZE.label };
-    return null;
-  }
-  const hit = find(pages, e.barId);
-  if (!hit) return null;
-  const r = slotRect(hit.s, hit.b, e.kind);
-  const size = e.kind === "chord" ? SIZE.chord : SIZE.cue;
-  // A cue is usually longer than its bar, and a chord box holds a whole bar's chords. Both get room
-  // to type in; the page itself is unchanged.
-  const minW = e.kind === "chord" ? 110 : 230;
-  return { page: hit.page, r: { ...r, w: Math.max(r.w, minW) }, size };
-}
-
-function EditLayer({ page, selected, editing, onSelect, onEdit }: {
-  page: PageLayout;
-  selected: string | null;
-  editing: Editing | null;
-  onSelect: (id: string) => void;
-  onEdit: (e: Editing) => void;
+function ChordEntry(props: {
+  song: Song;
+  initial: string;
+  selectAll: boolean;
+  left: number;
+  top: number;
+  width: number;
+  onCommit: (value: string, move: 1 | -1 | 0) => string | null;
+  onCancel: () => void;
 }) {
-  return (
-    <g className="edit-layer">
-      {page.systems.map((s) => {
-        const systemSelected = s.bars.some((b) => b.bar.id === selected);
-        return (
-          <g key={s.bars[0]!.bar.id} className={systemSelected ? "sys selected" : "sys"}>
-            {s.label && (
-              <rect
-                className="hit"
-                x={MARGIN_X - 2}
-                y={labelBaseline(s) - 13}
-                width={110}
-                height={17}
-                onClick={() => onEdit({ kind: "label", sectionId: s.sectionId })}
-              />
-            )}
-            {s.bars.map((b) => {
-              const isSel = b.bar.id === selected;
-              const slots: Array<[Slot, boolean]> = [["above", !!b.bar.cueAbove], ["chord", b.bar.chords.length > 0], ["below", !!b.bar.cueBelow]];
-              return (
-                <g key={b.bar.id} className={isSel ? "bar-edit selected" : "bar-edit"}>
-                  {isSel && <rect className="sel" x={b.x} y={s.y - 3} width={b.w} height={STAFF_H + 6} />}
-                  <rect
-                    className="hit"
-                    x={b.x}
-                    y={s.y - 2}
-                    width={b.w}
-                    height={STAFF_H + 4}
-                    onClick={() => {
-                      onSelect(b.bar.id);
-                      onEdit({ kind: "chord", barId: b.bar.id });
-                    }}
-                  />
-                  {slots.map(([slot, filled]) => {
-                    const r = slotRect(s, b, slot);
-                    const active = editing && "barId" in editing && editing.barId === b.bar.id && editing.kind === slot;
-                    return (
-                      <rect
-                        key={slot}
-                        className={`slot ${filled ? "filled" : "empty"}${active ? " active" : ""}`}
-                        x={r.x}
-                        y={r.y}
-                        width={r.w}
-                        height={r.h}
-                        onClick={() => {
-                          onSelect(b.bar.id);
-                          onEdit({ kind: slot, barId: b.bar.id });
-                        }}
-                      />
-                    );
-                  })}
-                </g>
-              );
-            })}
-          </g>
-        );
-      })}
-    </g>
-  );
-}
-
-function Overlay(props: Props & { page: number }) {
-  const { editing } = props;
-  if (!editing) return null;
-  const at = editRect(props.pages, editing);
-  if (!at || at.page !== props.page) return null;
-  // One input per slot, keyed by it: it mounts holding its slot's text and takes focus in the same
-  // commit. The first version filled the box in one effect and focused it in a later one; keys
-  // typed in between went nowhere, and a cue typed into a fresh system was lost (WORKLOG).
-  return <SlotInput key={JSON.stringify(editing)} {...props} editing={editing} at={at} />;
-}
-
-function SlotInput(props: Props & { editing: Editing; at: { r: Rect; size: number } }) {
-  const { editing, at } = props;
-  const [value, setValue] = useState(() => props.initialValue(editing));
+  const [value, setValue] = useState(props.initial);
   const [err, setErr] = useState<string | null>(null);
+  const [hi, setHi] = useState(-1);
   const input = useRef<HTMLInputElement>(null);
-  // False from the moment this slot is torn down, so the blur a browser may fire on removal does not
-  // commit or close the slot that replaced it.
   const alive = useRef(true);
+  const token = currentToken(value);
+  // A suggestion that only repeats what is typed is noise.
+  const list = suggest(props.song, token, 7).filter((t) => t !== token);
 
+  // Mounted with its text and focused in the same commit, so no keystroke lands nowhere (the lost
+  // cue found while verifying decision 3's build).
   useLayoutEffect(() => {
     alive.current = true;
-    input.current?.focus();
-    // Selected, so typing replaces a bar's chords rather than appending to them ("Bmaj7e9 g#m7").
-    input.current?.select();
+    const el = input.current;
+    if (el) {
+      el.focus();
+      if (props.selectAll) el.select();
+      else el.setSelectionRange(el.value.length, el.value.length);
+    }
     return () => {
       alive.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => setHi(-1), [token]);
 
-  const commit = (move: 1 | -1 | 0) => {
-    const e = props.onCommit(editing, value, move);
+  const commit = (move: 1 | -1 | 0, v = value) => {
+    const e = props.onCommit(v, move);
     setErr(e);
     return e;
   };
+  const accept = (t: string) => {
+    const v = replaceToken(value, t);
+    setValue(v);
+    setErr(null);
+    setHi(-1);
+    return v;
+  };
   const onKey = (ev: KeyboardEvent<HTMLInputElement>) => {
-    if (ev.key === "Enter" || (ev.key === "Tab" && editing.kind !== "title" && editing.kind !== "source" && editing.kind !== "label")) {
+    if (ev.key === "ArrowDown" && list.length) {
       ev.preventDefault();
-      commit(ev.shiftKey ? -1 : 1);
+      setHi((h) => Math.min(list.length - 1, h + 1));
+    } else if (ev.key === "ArrowUp" && list.length) {
+      ev.preventDefault();
+      setHi((h) => Math.max(-1, h - 1));
+    } else if (ev.key === "Enter") {
+      ev.preventDefault();
+      // A highlighted suggestion is taken into the box; otherwise Enter stores the bar and moves on.
+      if (hi >= 0 && list[hi]) accept(list[hi]!);
+      else commit(ev.shiftKey ? -1 : 1);
+    } else if (ev.key === "Tab") {
+      ev.preventDefault();
+      const v = hi >= 0 && list[hi] ? accept(list[hi]!) : value;
+      commit(ev.shiftKey ? -1 : 1, v);
     } else if (ev.key === "Escape") {
       ev.preventDefault();
-      props.onClose(editing);
+      props.onCancel();
     }
   };
-  const style: CSSProperties = {
-    left: at.r.x * SCALE,
-    top: at.r.y * SCALE,
-    width: at.r.w * SCALE,
-    height: at.r.h * SCALE,
-    fontFamily: TEXT_FONT,
-    fontSize: at.size * SCALE,
-  };
   return (
-    <>
+    <div className="entry" style={{ left: props.left, top: props.top, width: props.width }}>
       <input
         ref={input}
-        className={`slot-input slot-${editing.kind}${err ? " invalid" : ""}`}
-        style={style}
+        className={err ? "entry-input invalid" : "entry-input"}
+        style={{ fontFamily: TEXT_FONT, fontSize: SIZE.chord * SCALE }}
         value={value}
         spellCheck={false}
         autoComplete="off"
+        aria-label="Chords"
         onChange={(e) => {
           setValue(e.target.value);
           setErr(null);
         }}
         onKeyDown={onKey}
-        // Leaving the box keeps what was typed (non-negotiable 4). A refused chord stays as it was.
         onBlur={() => {
           if (!alive.current) return;
-          if (commit(0) === null) props.onClose(editing);
+          if (commit(0) !== null) props.onCancel();
         }}
-        aria-label={editing.kind}
-        title={err ?? undefined}
       />
-      {err && (
-        <div className="slot-error" style={{ left: at.r.x * SCALE, top: (at.r.y + at.r.h) * SCALE + 2 }}>
-          {err}
-        </div>
+      {err ? (
+        <div className="entry-error">{err}</div>
+      ) : (
+        list.length > 0 && (
+          <ul className="suggest" onMouseDown={(e) => e.preventDefault()}>
+            {list.map((t, i) => (
+              // mousemove, not mouseenter: the list opens under a resting pointer, and mouseenter
+              // then stole the highlight, so ↓ Enter took the second suggestion (found driving it).
+              <li key={t} className={i === hi ? "on" : ""} onMouseMove={() => hi !== i && setHi(i)} onClick={() => accept(t)}>
+                {t}
+              </li>
+            ))}
+          </ul>
+        )
       )}
-      {editing.kind === "chord" && (
-        // Kept inside the page: at the last bar of a system it hung 96 px past the scroller's edge.
-        <div className="palette-wrap" style={{ left: Math.min(at.r.x * SCALE, PAGE_W * SCALE - PALETTE_W - 8), top: (at.r.y + at.r.h) * SCALE + (err ? 24 : 4) }}>
-          <ChordPalette
-            song={props.song}
-            onPick={(f) => {
-              setValue((v) => f(v));
-              setErr(null);
-              input.current?.focus();
-            }}
-          />
-        </div>
-      )}
-    </>
+    </div>
+  );
+}
+
+function MetaEdit(props: {
+  initial: string;
+  left: number;
+  top: number;
+  width: number;
+  size: number;
+  align: "center" | "right";
+  onDone: (v: string | null) => void;
+}) {
+  const [v, setV] = useState(props.initial);
+  const ref = useRef<HTMLInputElement>(null);
+  const done = useRef(false);
+  useLayoutEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+  const finish = (x: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    props.onDone(x);
+  };
+  return (
+    <input
+      ref={ref}
+      className="meta-input"
+      style={{ left: props.left, top: props.top, width: props.width, fontFamily: TEXT_FONT, fontSize: props.size * SCALE, textAlign: props.align }}
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") finish(v);
+        if (e.key === "Escape") finish(null);
+      }}
+      onBlur={() => finish(v)}
+    />
   );
 }
 
 export function Sheet(props: Props) {
-  const { pages, song } = props;
+  const { pages, song, selected, focus, entry } = props;
+  const root = useRef<HTMLDivElement>(null);
+
+  // Keep the bar being worked on in view as entry and the arrow keys move through the chart.
+  useEffect(() => {
+    if (!focus) return;
+    root.current?.querySelector(`[data-hit="${focus}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [focus]);
+
+  const onDouble = (ev: MouseEvent<SVGRectElement>, s: SystemLayout, b: BarLayout) => {
+    const svg = ev.currentTarget.ownerSVGElement!;
+    const yPt = (ev.clientY - svg.getBoundingClientRect().top) / SCALE;
+    props.onOpen(b.bar.id, zoneAt(s, yPt));
+  };
+
+  const at = entry ? locate(pages, entry.barId) : null;
+
   return (
-    <div className="sheet">
+    <div className="sheet" ref={root}>
       {pages.map((p) => (
         <div key={p.index} className="page" style={{ width: PAGE_W * SCALE, height: PAGE_H * SCALE }}>
-          <svg
-            viewBox={`0 0 ${PAGE_W} ${PAGE_H}`}
-            width={PAGE_W * SCALE}
-            height={PAGE_H * SCALE}
-            className="page-svg"
-            data-page={p.index + 1}
-          >
+          <svg viewBox={`0 0 ${PAGE_W} ${PAGE_H}`} width={PAGE_W * SCALE} height={PAGE_H * SCALE} className="page-svg" data-page={p.index + 1}>
             <rect width={PAGE_W} height={PAGE_H} fill="#fff" />
+            <g className="edit-layer">
+              {p.systems.flatMap((s) =>
+                s.bars
+                  .filter((b) => selected.has(b.bar.id))
+                  .map((b) => (
+                    <rect key={`sel${b.bar.id}`} className={b.bar.id === focus ? "sel focus" : "sel"} x={b.x} y={s.y - 4} width={b.w} height={STAFF_H + 8} rx={1.5} />
+                  )),
+              )}
+            </g>
             <Notation page={p} title={song.title} source={song.source} />
-            {p.index === 0 && (
-              <g className="edit-layer">
-                <rect className="slot empty-hover" x={MARGIN_X + 80} y={TITLE_BASELINE - 22} width={PAGE_W - 2 * MARGIN_X - 160} height={28} onClick={() => props.onEdit({ kind: "title" })} />
-                <rect className="slot empty-hover" x={PAGE_W - MARGIN_X - 160} y={SOURCE_BASELINE - 12} width={160} height={16} onClick={() => props.onEdit({ kind: "source" })} />
-              </g>
-            )}
-            <EditLayer page={p} selected={props.selected} editing={props.editing} onSelect={props.onSelect} onEdit={props.onEdit} />
+            <g className="edit-layer">
+              {p.index === 0 && (
+                <>
+                  <rect className="meta-hit" x={MARGIN_X + 80} y={TITLE_BASELINE - 22} width={PAGE_W - 2 * MARGIN_X - 160} height={28} onClick={() => props.onEditMeta("title")} />
+                  <rect className="meta-hit" x={PAGE_W - MARGIN_X - 160} y={SOURCE_BASELINE - 12} width={160} height={16} onClick={() => props.onEditMeta("source")} />
+                </>
+              )}
+              {p.systems.flatMap((s) =>
+                s.bars.map((b) => {
+                  const c = barColumn(s, b);
+                  return (
+                    <rect
+                      key={b.bar.id}
+                      data-hit={b.bar.id}
+                      className="bar-hit"
+                      x={c.x}
+                      y={c.y}
+                      width={c.w}
+                      height={c.h}
+                      onMouseDown={(e) => {
+                        // Keeps focus where it is (an open chord box commits on its own blur only when
+                        // the click lands elsewhere), and stops a drag from selecting page text.
+                        e.preventDefault();
+                        (document.activeElement as HTMLElement | null)?.blur();
+                        props.onPress(b.bar.id, e.shiftKey);
+                      }}
+                      onDoubleClick={(e) => onDouble(e, s, b)}
+                    />
+                  );
+                }),
+              )}
+            </g>
           </svg>
-          <Overlay {...props} page={p.index} />
+          {at && at.page === p.index && entry && (
+            <ChordEntry
+              key={entry.barId}
+              song={song}
+              initial={entry.seed ?? props.chordText(entry.barId)}
+              selectAll={entry.seed === undefined}
+              left={at.b.x * SCALE}
+              top={(at.s.y - CHORD_ROW) * SCALE}
+              width={Math.max(at.b.w * SCALE, 150)}
+              onCommit={(v, move) => props.onCommitChords(entry.barId, v, move)}
+              onCancel={props.onCancelEntry}
+            />
+          )}
+          {p.index === 0 && props.editingMeta === "title" && (
+            <MetaEdit
+              initial={song.title}
+              left={(MARGIN_X + 60) * SCALE}
+              top={(TITLE_BASELINE - 24) * SCALE}
+              width={(PAGE_W - 2 * MARGIN_X - 120) * SCALE}
+              size={SIZE.title}
+              align="center"
+              onDone={(v) => (v === null ? props.onEditMeta(null) : props.onCommitMeta("title", v))}
+            />
+          )}
+          {p.index === 0 && props.editingMeta === "source" && (
+            <MetaEdit
+              initial={song.source}
+              left={(PAGE_W - MARGIN_X - 180) * SCALE}
+              top={(SOURCE_BASELINE - 13) * SCALE}
+              width={180 * SCALE}
+              size={SIZE.source}
+              align="right"
+              onDone={(v) => (v === null ? props.onEditMeta(null) : props.onCommitMeta("source", v))}
+            />
+          )}
         </div>
       ))}
     </div>

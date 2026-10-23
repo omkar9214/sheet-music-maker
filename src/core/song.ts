@@ -290,3 +290,110 @@ export function setTime(song: Song, time: TimeSig): Song {
     })),
   };
 }
+
+/*
+ * Range edits (decision 5). The editor works on a selection of bars, as iReal Pro's does: one
+ * press applies to every selected bar, rather than one press per bar.
+ */
+
+/** The bars from `a` to `b` inclusive, in reading order, whichever comes first. */
+export function barRange(song: Song, a: string, b: string): string[] {
+  const ids = allBars(song).map((x) => x.bar.id);
+  const i = ids.indexOf(a);
+  const j = ids.indexOf(b);
+  if (i < 0 || j < 0) return [];
+  return ids.slice(Math.min(i, j), Math.max(i, j) + 1);
+}
+
+export function updateBars(song: Song, ids: readonly string[], patch: Partial<Omit<Bar, "id">>): Song {
+  return ids.reduce((s, id) => updateBar(s, id, patch), song);
+}
+
+export function clearChords(song: Song, ids: readonly string[]): Song {
+  return updateBars(song, ids, { chords: [] });
+}
+
+/**
+ * Repeat signs for a selection: |: on its first bar and :| on its last. Off removes both. Selecting
+ * the four bars and pressing once is the whole gesture.
+ */
+export function setRepeat(song: Song, ids: readonly string[], on: boolean, times = 2): Song {
+  const first = ids[0];
+  const last = ids[ids.length - 1];
+  if (!first || !last) return song;
+  let s = updateBar(song, first, { repeatStart: on ? true : undefined });
+  s = updateBar(s, last, { repeatEnd: on ? { times } : undefined });
+  return s;
+}
+
+/** An ending number for every selected bar. If every one already has it, it comes off all of them. */
+export function toggleEnding(song: Song, ids: readonly string[], n: number): Song {
+  const bars = ids.map((id) => {
+    const r = findBar(song, id);
+    return r ? song.sections[r.section]!.bars[r.bar]! : undefined;
+  });
+  const allHave = bars.every((b) => b?.ending?.includes(n));
+  return ids.reduce((s, id, i) => {
+    const cur = bars[i]?.ending ?? [];
+    const next = allHave ? cur.filter((x) => x !== n) : [...new Set([...cur, n])].sort((a, b) => a - b);
+    return updateBar(s, id, { ending: next });
+  }, song);
+}
+
+/** Deletes the selected bars, keeping at least one bar in each section they touch. */
+export function deleteBars(song: Song, ids: readonly string[]): Song {
+  return ids.reduce((s, id) => deleteBar(s, id), song);
+}
+
+/** A section's bar count, set from the Form panel: adds empty bars at the end, or removes from it. */
+export function setBarCount(song: Song, sectionId: string, n: number): Song {
+  const count = Math.max(1, Math.min(64, Math.round(n)));
+  return {
+    ...song,
+    sections: song.sections.map((s) => {
+      if (s.id !== sectionId || s.bars.length === count) return s;
+      if (s.bars.length > count) return { ...s, bars: s.bars.slice(0, count) };
+      return { ...s, bars: [...s.bars, ...Array.from({ length: count - s.bars.length }, emptyBar)] };
+    }),
+  };
+}
+
+/** What ⌘C takes: each bar's chords, rhythm and cues, but not its repeat signs or endings. Those
+ * belong to where a bar sits in the form, not to its music. */
+export type BarClip = Pick<Bar, "chords" | "pattern" | "cueAbove" | "cueBelow">;
+
+export function copyBars(song: Song, ids: readonly string[]): BarClip[] {
+  return ids.flatMap((id) => {
+    const r = findBar(song, id);
+    if (!r) return [];
+    const sec = song.sections[r.section]!;
+    const b = sec.bars[r.bar]!;
+    // The rhythm the bar draws, not only its override: Melody's slashes pasted into a strummed
+    // Chorus came out strummed when only overrides were copied (found driving it).
+    const clip: BarClip = { chords: structuredClone(b.chords), pattern: barPatternId(sec, b) };
+    if (b.cueAbove) clip.cueAbove = b.cueAbove;
+    if (b.cueBelow) clip.cueBelow = b.cueBelow;
+    return [clip];
+  });
+}
+
+/** ⌘V: overwrites bars from `startId` on, in reading order, and stops at the end of the chart.
+ * Returns the ids written, so the editor can select them. */
+export function pasteBars(song: Song, startId: string, clips: readonly BarClip[]): { song: Song; ids: string[] } {
+  const ids = allBars(song).map((x) => x.bar.id);
+  const i = ids.indexOf(startId);
+  if (i < 0) return { song, ids: [] };
+  const target = ids.slice(i, i + clips.length);
+  const next = target.reduce(
+    (s, id, k) =>
+      updateBar(s, id, {
+        chords: structuredClone(clips[k]!.chords),
+        // An override only where the destination section would draw something else.
+        pattern: clips[k]!.pattern === s.sections[findBar(s, id)!.section]!.pattern ? undefined : clips[k]!.pattern,
+        cueAbove: clips[k]!.cueAbove,
+        cueBelow: clips[k]!.cueBelow,
+      }),
+    song,
+  );
+  return { song: next, ids: target };
+}

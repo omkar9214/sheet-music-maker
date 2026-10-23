@@ -1,11 +1,12 @@
 /**
- * The selected bar and its section. Labels and values only (§7.1). A control that cannot act in the
- * current state is not drawn (§7.2): the repeat count appears only on a closing repeat.
+ * What the selection holds, and what can be done to it (decision 5). Every control acts on all the
+ * selected bars at once. A control that cannot act on this selection is not drawn (§7.2): cues and
+ * signs exist for one bar, so they appear only when one bar is selected, and the repeat count only
+ * on a closing repeat. Labels and values only (§7.1).
  */
-import type { Jump, Marker, Section, Song } from "../core/song";
+import { useEffect, useRef, useState } from "react";
+import type { Bar, Jump, Marker, Song } from "../core/song";
 import { barPatternId, findBar } from "../core/song";
-
-export const SECTION_NAMES = ["Intro", "Verse", "Pre-Chorus", "Chorus", "Bridge", "Solo", "Interlude", "Outro"];
 
 const MARKERS: Array<[Marker, string]> = [["segno", "Segno"], ["coda", "Coda"]];
 const JUMPS: Array<[Jump, string]> = [
@@ -17,141 +18,177 @@ const JUMPS: Array<[Jump, string]> = [
 ];
 
 export interface InspectorActions {
-  setBarPattern: (id: string | undefined) => void;
-  setSectionPattern: (id: string) => void;
-  toggleRepeatStart: () => void;
-  toggleRepeatEnd: () => void;
+  openChords: () => void;
+  setCue: (which: "cueAbove" | "cueBelow", text: string) => void;
+  setRhythm: (patternId: string) => void;
+  setRepeatStart: (on: boolean) => void;
+  setRepeatEnd: (on: boolean) => void;
+  setRepeat: (on: boolean) => void;
   setRepeatTimes: (n: number) => void;
   toggleEnding: (n: number) => void;
   setMarker: (m: Marker | undefined) => void;
   setJump: (j: Jump | undefined) => void;
   insertBar: (before: boolean) => void;
-  deleteBar: () => void;
-  renameSection: () => void;
-  moveSection: (by: -1 | 1) => void;
-  duplicateSection: () => void;
-  deleteSection: () => void;
-  addSection: (name: string) => void;
+  deleteBars: () => void;
 }
 
-function Chip(props: { on?: boolean; onClick: () => void; children: React.ReactNode; title?: string; disabled?: boolean }) {
+function Chip(props: { on?: boolean; onClick: () => void; children: React.ReactNode; title?: string }) {
   return (
-    <button className={props.on ? "chip on" : "chip"} onClick={props.onClick} title={props.title} disabled={props.disabled}>
+    <button className={props.on ? "chip on" : "chip"} onClick={props.onClick} title={props.title}>
       {props.children}
     </button>
   );
 }
 
-export function Inspector({ song, barId, a }: { song: Song; barId: string | null; a: InspectorActions }) {
-  const ref = barId ? findBar(song, barId) : null;
-  const section: Section | undefined = ref ? song.sections[ref.section] : undefined;
-  const bar = ref && section ? section.bars[ref.bar] : undefined;
-  const number = ref ? song.sections.slice(0, ref.section).reduce((n, s) => n + s.bars.length, 0) + ref.bar + 1 : 0;
+/** A cue field: stores on Enter or on leaving it, so a cue is one undo step, not one per letter. */
+function CueField(props: { label: string; value: string; focusKey: number; onFocused: () => void; onCommit: (v: string) => void }) {
+  const [v, setV] = useState(props.value);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => setV(props.value), [props.value]);
+  useEffect(() => {
+    // One-shot: the request is spent once honoured. Kept alive, it re-focused this field every time
+    // a single bar was selected again, and the arrow keys and ⌘V went into the field instead.
+    if (props.focusKey > 0) {
+      ref.current?.focus();
+      ref.current?.select();
+      props.onFocused();
+    }
+  }, [props.focusKey]);
+  const done = () => v.trim() !== props.value && props.onCommit(v.trim());
+  return (
+    <label className="row cue">
+      <span className="lbl">{props.label}</span>
+      <input
+        ref={ref}
+        value={v}
+        spellCheck={false}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={done}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") {
+            setV(props.value);
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+      />
+    </label>
+  );
+}
 
-  if (!bar || !section || !ref) {
-    return (
-      <aside className="inspector">
-        <div className="group">
-          <h3>Add section</h3>
-          <div className="chips">
-            {SECTION_NAMES.map((n) => <Chip key={n} onClick={() => a.addSection(n)}>{n}</Chip>)}
-          </div>
-        </div>
-      </aside>
-    );
+export function Inspector(props: {
+  song: Song;
+  ids: readonly string[];
+  chordsText: string;
+  focusCue: { which: "above" | "below"; n: number } | null;
+  onCueFocused: () => void;
+  a: InspectorActions;
+}) {
+  const { song, ids, a } = props;
+  const bars: Array<{ bar: Bar; pattern: string; number: number }> = [];
+  let n = 0;
+  const numbers = new Map<string, number>();
+  for (const s of song.sections) for (const b of s.bars) numbers.set(b.id, ++n);
+  for (const id of ids) {
+    const r = findBar(song, id);
+    if (!r) continue;
+    const s = song.sections[r.section]!;
+    const bar = s.bars[r.bar]!;
+    bars.push({ bar, pattern: barPatternId(s, bar), number: numbers.get(id)! });
   }
+  if (bars.length === 0) return <aside className="inspector empty" />;
 
-  const current = barPatternId(section, bar);
+  const one = bars.length === 1 ? bars[0]!.bar : null;
+  const first = bars[0]!;
+  const last = bars[bars.length - 1]!;
+  const sectionName = song.sections[findBar(song, first.bar.id)!.section]!.name;
+  const samePattern = bars.every((b) => b.pattern === first.pattern) ? first.pattern : null;
+
   return (
     <aside className="inspector">
-      <div className="group">
-        <h3>Bar {number}</h3>
-        <div className="row">
-          <span className="lbl">Rhythm</span>
-          <div className="chips">
-            {song.patterns.map((p) => (
-              <Chip key={p.id} on={current === p.id} onClick={() => a.setBarPattern(p.id === section.pattern ? undefined : p.id)}>
-                {p.name}
-              </Chip>
-            ))}
-          </div>
-        </div>
-        <div className="row">
-          <span className="lbl">Repeat</span>
-          <div className="chips">
-            <Chip on={!!bar.repeatStart} onClick={a.toggleRepeatStart} title="Start repeat">|:</Chip>
-            <Chip on={!!bar.repeatEnd} onClick={a.toggleRepeatEnd} title="End repeat">:|</Chip>
-            {bar.repeatEnd && (
-              <span className="stepper">
-                <button onClick={() => a.setRepeatTimes(bar.repeatEnd!.times - 1)} disabled={bar.repeatEnd.times <= 2}>−</button>
-                <span>{bar.repeatEnd.times}×</span>
-                <button onClick={() => a.setRepeatTimes(bar.repeatEnd!.times + 1)} disabled={bar.repeatEnd.times >= 16}>+</button>
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="row">
-          <span className="lbl">Ending</span>
-          <div className="chips">
-            {[1, 2, 3, 4].map((n) => (
-              <Chip key={n} on={bar.ending?.includes(n)} onClick={() => a.toggleEnding(n)}>{n}.</Chip>
-            ))}
-          </div>
-        </div>
-        <div className="row">
-          <span className="lbl">Sign</span>
-          <div className="chips">
-            {MARKERS.map(([m, t]) => (
-              <Chip key={m} on={bar.marker === m} onClick={() => a.setMarker(bar.marker === m ? undefined : m)}>{t}</Chip>
-            ))}
-          </div>
-        </div>
-        <div className="row">
-          <span className="lbl">Jump</span>
-          <div className="chips">
-            {JUMPS.map(([j, t]) => (
-              <Chip key={j} on={bar.jump === j} onClick={() => a.setJump(bar.jump === j ? undefined : j)}>{t}</Chip>
-            ))}
-          </div>
-        </div>
-        <div className="row">
-          <span className="lbl">Bar</span>
-          <div className="chips">
-            <Chip onClick={() => a.insertBar(true)}>+ Before</Chip>
-            <Chip onClick={() => a.insertBar(false)}>+ After</Chip>
-            {section.bars.length > 1 && <Chip onClick={a.deleteBar}>Delete</Chip>}
-          </div>
-        </div>
-      </div>
+      <h3>
+        {one ? `Bar ${first.number}` : `Bars ${first.number}–${last.number}`}
+        <span className="muted"> · {sectionName}</span>
+      </h3>
 
-      <div className="group">
-        <h3>
-          <button className="link" onClick={a.renameSection}>{section.name}</button>
-          <span className="muted"> · {section.bars.length} bars</span>
-        </h3>
-        <div className="row">
-          <span className="lbl">Rhythm</span>
-          <div className="chips">
-            {song.patterns.map((p) => (
-              <Chip key={p.id} on={section.pattern === p.id} onClick={() => a.setSectionPattern(p.id)}>{p.name}</Chip>
-            ))}
-          </div>
-        </div>
-        <div className="row">
-          <span className="lbl">Section</span>
-          <div className="chips">
-            <Chip onClick={() => a.moveSection(-1)} disabled={ref.section === 0}>↑</Chip>
-            <Chip onClick={() => a.moveSection(1)} disabled={ref.section === song.sections.length - 1}>↓</Chip>
-            <Chip onClick={a.duplicateSection}>Duplicate</Chip>
-            {song.sections.length > 1 && <Chip onClick={a.deleteSection}>Delete</Chip>}
-          </div>
-        </div>
-      </div>
+      {one && (
+        <>
+          <button className="chords-field" onClick={a.openChords}>
+            {props.chordsText || <span className="muted">—</span>}
+          </button>
+          <CueField label="Above" value={one.cueAbove ?? ""} focusKey={props.focusCue?.which === "above" ? props.focusCue.n : 0} onFocused={props.onCueFocused} onCommit={(v) => a.setCue("cueAbove", v)} />
+          <CueField label="Below" value={one.cueBelow ?? ""} focusKey={props.focusCue?.which === "below" ? props.focusCue.n : 0} onFocused={props.onCueFocused} onCommit={(v) => a.setCue("cueBelow", v)} />
+        </>
+      )}
 
-      <div className="group">
-        <h3>Add section</h3>
+      <div className="row">
+        <span className="lbl">Rhythm</span>
         <div className="chips">
-          {SECTION_NAMES.map((n) => <Chip key={n} onClick={() => a.addSection(n)}>{n}</Chip>)}
+          {song.patterns.map((p) => (
+            <Chip key={p.id} on={samePattern === p.id} onClick={() => a.setRhythm(p.id)}>{p.name}</Chip>
+          ))}
+        </div>
+      </div>
+
+      <div className="row">
+        <span className="lbl">Repeat</span>
+        <div className="chips">
+          {one ? (
+            <>
+              <Chip on={!!one.repeatStart} onClick={() => a.setRepeatStart(!one.repeatStart)} title="Start repeat">|:</Chip>
+              <Chip on={!!one.repeatEnd} onClick={() => a.setRepeatEnd(!one.repeatEnd)} title="End repeat">:|</Chip>
+            </>
+          ) : (
+            <Chip on={!!first.bar.repeatStart && !!last.bar.repeatEnd} onClick={() => a.setRepeat(!(first.bar.repeatStart && last.bar.repeatEnd))}>
+              |: {first.number}–{last.number} :|
+            </Chip>
+          )}
+          {last.bar.repeatEnd && (
+            <span className="stepper">
+              <button onClick={() => a.setRepeatTimes(last.bar.repeatEnd!.times - 1)} disabled={last.bar.repeatEnd.times <= 2}>−</button>
+              <span>{last.bar.repeatEnd.times}×</span>
+              <button onClick={() => a.setRepeatTimes(last.bar.repeatEnd!.times + 1)} disabled={last.bar.repeatEnd.times >= 16}>+</button>
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="row">
+        <span className="lbl">Ending</span>
+        <div className="chips">
+          {[1, 2, 3, 4].map((k) => (
+            <Chip key={k} on={bars.every((b) => b.bar.ending?.includes(k))} onClick={() => a.toggleEnding(k)}>{k}.</Chip>
+          ))}
+        </div>
+      </div>
+
+      {one && (
+        <>
+          <div className="row">
+            <span className="lbl">Sign</span>
+            <div className="chips">
+              {MARKERS.map(([m, t]) => (
+                <Chip key={m} on={one.marker === m} onClick={() => a.setMarker(one.marker === m ? undefined : m)}>{t}</Chip>
+              ))}
+            </div>
+          </div>
+          <div className="row">
+            <span className="lbl">Jump</span>
+            <div className="chips">
+              {JUMPS.map(([j, t]) => (
+                <Chip key={j} on={one.jump === j} onClick={() => a.setJump(one.jump === j ? undefined : j)}>{t}</Chip>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="row">
+        <span className="lbl">Bars</span>
+        <div className="chips">
+          <Chip onClick={() => a.insertBar(true)}>+ Before</Chip>
+          <Chip onClick={() => a.insertBar(false)}>+ After</Chip>
+          <Chip onClick={a.deleteBars}>Delete</Chip>
         </div>
       </div>
     </aside>

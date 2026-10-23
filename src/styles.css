@@ -77,55 +77,92 @@ button { font: inherit; color: inherit; }
 .chip:disabled { opacity: 0.35; cursor: default; }
 
 .workspace { flex: 1; display: flex; min-height: 0; }
-.scroller { flex: 1; overflow: auto; padding: 24px; }
+.scroller { flex: 1; overflow: auto; padding: 20px 16px; }
 .sheet { display: flex; flex-direction: column; align-items: center; gap: 24px; width: max-content; margin: 0 auto; }
 .page { position: relative; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 6px 20px rgba(0, 0, 0, 0.06); flex: none; }
 .page-svg { display: block; }
 
 .inspector {
-  width: 300px; flex: none; overflow: auto; background: var(--panel); border-left: 1px solid var(--line);
-  padding: 14px; display: flex; flex-direction: column; gap: 18px;
+  width: 260px; flex: none; overflow: auto; background: var(--panel); border-left: 1px solid var(--line);
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
 }
-.inspector h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
-.inspector .row { display: grid; grid-template-columns: 56px 1fr; gap: 6px; align-items: start; margin-bottom: 7px; }
+.inspector.empty { background: var(--bg); border-left-color: transparent; }
+.inspector h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+.inspector .row { display: grid; grid-template-columns: 52px 1fr; gap: 6px; align-items: start; }
 .inspector .lbl { color: var(--muted); padding-top: 5px; }
+.inspector .cue input {
+  height: 28px; border: 1px solid var(--line); border-radius: 5px; padding: 0 7px; background: #fff;
+  font-family: Edwin, serif; font-size: 14px; min-width: 0;
+}
+.inspector .cue input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.chords-field {
+  text-align: left; height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 5px;
+  background: #fff; cursor: text; font-family: Edwin, serif; font-size: 17px;
+}
+.chords-field:hover { border-color: #b9b2a6; }
 .stepper { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; }
 .stepper button { width: 24px; height: 26px; border: 1px solid var(--line); border-radius: 5px; background: #fff; cursor: pointer; }
 .stepper button:disabled { opacity: 0.35; cursor: default; }
 .stepper span { min-width: 26px; text-align: center; font-weight: 600; }
 
-/* Edit layer: invisible until it helps. Empty slots are dashed on the hovered bar and across the
-   selected system; nothing here prints. */
-.edit-layer .hit { fill: transparent; cursor: pointer; }
-.edit-layer .sel { fill: var(--accent-soft); pointer-events: none; }
-.edit-layer .slot { fill: transparent; stroke: transparent; cursor: text; }
-.edit-layer .slot.empty { stroke-dasharray: 2 2; stroke-width: 0.6; }
-.edit-layer .bar-edit:hover .slot.empty,
-.edit-layer .sys.selected .slot.empty { stroke: #9aa7c7; }
-.edit-layer .slot.filled:hover,
-.edit-layer .slot.empty-hover:hover { fill: var(--accent-soft); }
-.edit-layer .slot.active { stroke: transparent !important; }
+/* Form panel: the song map. */
+.form-panel {
+  width: 220px; flex: none; overflow: auto; background: var(--panel); border-right: 1px solid var(--line);
+  padding: 14px 10px; display: flex; flex-direction: column; gap: 8px;
+}
+.form-panel h3 { margin: 0 4px 2px; font-size: 14px; font-weight: 600; }
+.form-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.form-list li {
+  display: grid; grid-template-columns: 22px 1fr auto; grid-template-rows: auto auto; align-items: center;
+  column-gap: 4px; padding: 5px 6px; border-radius: 6px; cursor: pointer;
+}
+.form-list li:hover { background: rgba(0, 0, 0, 0.035); }
+.form-list li.on { background: var(--accent-soft); }
+.form-bar { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.form-name { border: 0; background: none; padding: 0; text-align: left; font-weight: 600; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.form-name-input { font: inherit; font-weight: 600; border: 1px solid var(--accent); border-radius: 4px; padding: 1px 4px; min-width: 0; }
+.form-count { display: inline-flex; align-items: center; gap: 2px; }
+.form-count span { min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+.form-count button, .form-tools button {
+  width: 20px; height: 20px; border: 0; border-radius: 4px; background: none; cursor: pointer; color: var(--muted); padding: 0; line-height: 1;
+}
+.form-count button:hover:not(:disabled), .form-tools button:hover:not(:disabled) { background: rgba(0, 0, 0, 0.07); color: var(--ink); }
+.form-count button:disabled, .form-tools button:disabled { opacity: 0.3; cursor: default; }
+/* Tools show on the row being pointed at or worked on, so the list reads as a song map, not a toolbar. */
+.form-tools { grid-column: 2 / 4; display: none; gap: 2px; margin-top: 2px; }
+.form-list li:hover .form-tools, .form-list li.on .form-tools { display: flex; }
+.form-add { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 2px 0; border-top: 1px solid var(--line); }
+.form-add .chip { height: 24px; padding: 0 7px; font-size: 12px; }
 
-.slot-input {
-  position: absolute; z-index: 5; margin: 0; padding: 0 4px; border: 1.5px solid var(--accent);
-  border-radius: 3px; background: #fff; color: #000; outline: none;
-  box-shadow: 0 2px 10px rgba(47, 95, 208, 0.18);
+/* The page's edit layer: selection only. Nothing here prints. */
+.edit-layer .bar-hit { fill: transparent; cursor: default; }
+.edit-layer .meta-hit { fill: transparent; cursor: text; }
+.edit-layer .meta-hit:hover { fill: var(--accent-soft); }
+.edit-layer .sel { fill: var(--accent-soft); pointer-events: none; }
+.edit-layer .sel.focus { stroke: var(--accent); stroke-width: 0.9; }
+
+.entry { position: absolute; z-index: 5; }
+.entry-input {
+  width: 100%; height: 26px; margin: 0; padding: 0 5px; border: 1.5px solid var(--accent); border-radius: 4px;
+  background: #fff; color: #000; outline: none; box-shadow: 0 2px 10px rgba(47, 95, 208, 0.18);
 }
-.slot-input.invalid { border-color: var(--danger); box-shadow: 0 2px 10px rgba(192, 57, 43, 0.2); }
-.slot-error { position: absolute; z-index: 6; color: #fff; background: var(--danger); padding: 2px 6px; border-radius: 3px; font-size: 12px; }
-.palette-wrap { position: absolute; z-index: 6; }
-.palette {
-  width: 430px; padding: 8px; background: #fff; border: 1px solid var(--line); border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); display: flex; flex-direction: column; gap: 6px;
+.entry-input.invalid { border-color: var(--danger); box-shadow: 0 2px 10px rgba(192, 57, 43, 0.2); }
+.entry-error { margin-top: 3px; display: inline-block; color: #fff; background: var(--danger); padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+.suggest {
+  list-style: none; margin: 3px 0 0; padding: 4px; width: max-content; min-width: 140px; background: #fff;
+  border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.14);
 }
-.palette-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-.palette-label { width: 52px; color: var(--muted); font-size: 12px; }
-.palette .chip { height: 24px; padding: 0 7px; font-family: Edwin, serif; font-size: 14px; }
+.suggest li { padding: 3px 8px; border-radius: 4px; cursor: pointer; font-family: Edwin, serif; font-size: 15px; }
+.suggest li.on { background: var(--accent); color: #fff; }
+.meta-input {
+  position: absolute; z-index: 5; margin: 0; padding: 0 4px; border: 1.5px solid var(--accent); border-radius: 3px;
+  background: #fff; outline: none;
+}
 
 @page { size: letter; margin: 0; }
 @media print {
   html, body, #root, .app, .workspace, .scroller { height: auto; overflow: visible; background: #fff; }
-  .topbar, .inspector, .edit-layer, .slot-input, .palette-wrap, .slot-error { display: none !important; }
+  .topbar, .inspector, .form-panel, .edit-layer, .entry, .meta-input { display: none !important; }
   .scroller { padding: 0; }
   .sheet { gap: 0; width: auto; }
   .page { box-shadow: none; width: 8.5in !important; height: 11in !important; break-after: page; overflow: hidden; }

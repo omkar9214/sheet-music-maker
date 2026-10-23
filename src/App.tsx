@@ -1,187 +1,260 @@
 /**
- * The chart maker (AGENTS.md §0, decisions 2–3): the page is the editor, the inspector holds what
- * belongs to the selected bar and its section, and the top bar holds the song.
+ * The chart maker (AGENTS.md §0, decisions 2–3), editor redesigned in decision 5: the Form panel
+ * holds the sections, the page is selected bar by bar like a spreadsheet, and the inspector acts on
+ * the selection. The keyboard does the transcribing:
+ *
+ *   ←/→ ↑/↓   move (⇧ extends)        A–G, %, N   start typing chords into the bar
+ *   Enter     edit the bar's chords   Enter/Tab   in the box: store, next bar (⇧: previous)
+ *   ⌫         clear chords            ⌘C / ⌘V     copy / paste bars
+ *   Esc       deselect                ⌘Z / ⇧⌘Z    undo / redo
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { barText } from "./core/chord";
 import {
-  addSection, allBars, deleteBar, deletePattern, deleteSection, duplicateSection, findBar, insertBar,
-  moveSection, setBarText, setKeyKeepChords, setPatterns, setTime, transpose, updateBar, updateSection,
-  type Bar, type Song,
+  addSection, allBars, barRange, clearChords, copyBars, deleteBars, deletePattern, deleteSection,
+  duplicateSection, findBar, insertBar, moveSection, pasteBars, setBarCount, setBarText, setKeyKeepChords,
+  setPatterns, setRepeat, setTime, toggleEnding, transpose, updateBar, updateBars, updateSection,
+  type Bar, type BarClip, type Song,
 } from "./core/song";
+import { FormPanel, type FormActions } from "./ui/FormPanel";
 import { Inspector, type InspectorActions } from "./ui/Inspector";
-import { Sheet, type Editing } from "./ui/Sheet";
+import { Sheet, type Entry, type Zone } from "./ui/Sheet";
 import { TopBar } from "./ui/TopBar";
-import { layoutSong } from "./ui/engrave/layout";
+import { layoutSong, type PageLayout } from "./ui/engrave/layout";
 import { measureText, useFontsReady } from "./ui/engrave/measure";
 import { useChartStore } from "./ui/store";
+
+interface Selection {
+  anchor: string;
+  focus: string;
+}
 
 function barOf(song: Song, id: string | null): Bar | undefined {
   const r = id ? findBar(song, id) : null;
   return r ? song.sections[r.section]?.bars[r.bar] : undefined;
 }
 
+/** ↑/↓: the bar in the system above or below whose middle is nearest this one's. */
+function verticalNeighbour(pages: PageLayout[], id: string, dir: -1 | 1): string | null {
+  const systems = pages.flatMap((p) => p.systems);
+  const i = systems.findIndex((s) => s.bars.some((b) => b.bar.id === id));
+  const here = systems[i]?.bars.find((b) => b.bar.id === id);
+  const there = systems[i + dir];
+  if (!here || !there) return null;
+  const mid = here.x + here.w / 2;
+  let best = there.bars[0]!;
+  for (const b of there.bars) if (Math.abs(b.x + b.w / 2 - mid) < Math.abs(best.x + best.w / 2 - mid)) best = b;
+  return best.bar.id;
+}
+
 export function App() {
   const store = useChartStore();
   const { song, edit } = store;
   const fonts = useFontsReady();
-  const [selected, setSelected] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Editing | null>(null);
+  const [sel, setSel] = useState<Selection | null>(null);
+  const [entry, setEntry] = useState<Entry | null>(null);
+  const [meta, setMeta] = useState<"title" | "source" | null>(null);
+  const [focusCue, setFocusCue] = useState<{ which: "above" | "below"; n: number } | null>(null);
+  const clipboard = useRef<BarClip[]>([]);
 
   const pages = useMemo(() => (fonts ? layoutSong(song, measureText) : []), [song, fonts]);
+  const ids = useMemo(() => (sel ? barRange(song, sel.anchor, sel.focus) : []), [song, sel]);
+  const selected = useMemo(() => new Set(ids), [ids]);
 
   // A selection that no longer exists (undo, delete, another chart) is dropped, not kept dangling.
   useEffect(() => {
-    if (selected && !findBar(song, selected)) setSelected(null);
-    if (editing && "barId" in editing && !findBar(song, editing.barId)) setEditing(null);
-  }, [song, selected, editing]);
+    if (sel && (!findBar(song, sel.anchor) || !findBar(song, sel.focus))) setSel(null);
+    if (entry && !findBar(song, entry.barId)) setEntry(null);
+  }, [song, sel, entry]);
   useEffect(() => {
     document.title = song.title ? `${song.title} — Sheet Music Maker` : "Sheet Music Maker";
   }, [song.title]);
 
-  const initialValue = useCallback(
-    (e: Editing): string => {
-      if (e.kind === "title") return song.title;
-      if (e.kind === "source") return song.source;
-      if (e.kind === "label") return song.sections.find((s) => s.id === e.sectionId)?.name ?? "";
-      const bar = barOf(song, e.barId);
-      if (!bar) return "";
-      if (e.kind === "chord") return barText(bar.chords, song.key, song.time);
-      return (e.kind === "above" ? bar.cueAbove : bar.cueBelow) ?? "";
+  const select = (id: string) => setSel({ anchor: id, focus: id });
+
+  const chordText = useCallback(
+    (id: string) => {
+      const b = barOf(song, id);
+      return b ? barText(b.chords, song.key, song.time) : "";
     },
     [song],
   );
 
-  const onCommit = useCallback(
-    (e: Editing, value: string, move: 1 | -1 | 0): string | null => {
-      const unchanged = value === initialValue(e);
-      if (e.kind === "title") {
-        if (!unchanged) edit((s) => ({ ...s, title: value.trim() }));
-        setEditing(null);
+  const onCommitChords = useCallback(
+    (id: string, value: string, move: 1 | -1 | 0): string | null => {
+      if (value.trim() !== chordText(id)) {
+        const r = setBarText(song, id, value);
+        if (r.error) return r.error;
+        edit(() => r.song);
+      }
+      if (move === 0) {
+        setEntry(null);
         return null;
       }
-      if (e.kind === "source") {
-        if (!unchanged) edit((s) => ({ ...s, source: value.trim() }));
-        setEditing(null);
-        return null;
-      }
-      if (e.kind === "label") {
-        const name = value.trim().replace(/:$/, "");
-        if (!unchanged && name) edit((s) => updateSection(s, e.sectionId, { name }));
-        setEditing(null);
-        return null;
-      }
-      if (!unchanged) {
-        if (e.kind === "chord") {
-          const r = setBarText(song, e.barId, value);
-          if (r.error) return r.error;
-          edit(() => r.song);
-        } else {
-          const text = value.trim();
-          edit((s) => updateBar(s, e.barId, e.kind === "above" ? { cueAbove: text } : { cueBelow: text }));
-        }
-      }
-      if (move === 0) return null;
-      // Enter / Tab: on to the same slot in the next bar, which is the transcribing loop (§0 step 3).
+      // Enter / Tab: on to the next bar with the box still open, which is the transcribing loop
+      // (§0 step 3). Off the end of the chart, entry closes and the last bar stays selected.
       const flat = allBars(song);
-      const i = flat.findIndex((x) => x.bar.id === e.barId);
-      const next = flat[i + move];
+      const next = flat[flat.findIndex((x) => x.bar.id === id) + move];
       if (next) {
-        setSelected(next.bar.id);
-        setEditing({ kind: e.kind, barId: next.bar.id });
+        select(next.bar.id);
+        setEntry({ barId: next.bar.id });
       } else {
-        setEditing(null);
+        setEntry(null);
       }
       return null;
     },
-    [song, edit, initialValue],
+    [song, edit, chordText],
   );
 
-  // Undo and redo from the keyboard, except inside a text box, which has its own.
+  const onOpen = (id: string, zone: Zone) => {
+    select(id);
+    if (zone === "chord") setEntry({ barId: id });
+    else setFocusCue({ which: zone, n: Date.now() });
+  };
+
+  // The keyboard, when no text box has it.
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       const t = ev.target as HTMLElement;
       if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return;
       const mod = ev.metaKey || ev.ctrlKey;
-      if (mod && ev.key.toLowerCase() === "z") {
+      const k = ev.key;
+      if (mod && k.toLowerCase() === "z") {
         ev.preventDefault();
         if (ev.shiftKey) store.redo();
         else store.undo();
-      } else if (mod && ev.key.toLowerCase() === "y") {
+        return;
+      }
+      if (mod && k.toLowerCase() === "y") {
         ev.preventDefault();
         store.redo();
-      } else if (!mod && selected) {
-        const flat = allBars(song);
-        const i = flat.findIndex((x) => x.bar.id === selected);
-        if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
-          const n = flat[i + (ev.key === "ArrowRight" ? 1 : -1)];
-          if (n) setSelected(n.bar.id);
+        return;
+      }
+      if (!sel) {
+        // Nothing selected: an arrow or a chord letter starts at bar 1.
+        const firstId = allBars(song)[0]?.bar.id;
+        if (firstId && (k.startsWith("Arrow") || k === "Enter")) {
           ev.preventDefault();
-        } else if (ev.key === "Enter") {
-          setEditing({ kind: "chord", barId: selected });
-          ev.preventDefault();
-        } else if (ev.key === "Escape") {
-          setSelected(null);
+          select(firstId);
         }
+        return;
+      }
+      if (mod && k.toLowerCase() === "c") {
+        clipboard.current = copyBars(song, ids);
+        ev.preventDefault();
+        return;
+      }
+      if (mod && k.toLowerCase() === "v" && clipboard.current.length) {
+        ev.preventDefault();
+        const r = pasteBars(song, ids[0]!, clipboard.current);
+        edit(() => r.song);
+        if (r.ids.length) setSel({ anchor: r.ids[0]!, focus: r.ids[r.ids.length - 1]! });
+        return;
+      }
+      if (mod) return;
+      const flat = allBars(song).map((x) => x.bar.id);
+      const at = flat.indexOf(sel.focus);
+      let to: string | null | undefined;
+      if (k === "ArrowRight") to = flat[at + 1];
+      else if (k === "ArrowLeft") to = flat[at - 1];
+      else if (k === "ArrowUp") to = verticalNeighbour(pages, sel.focus, -1);
+      else if (k === "ArrowDown") to = verticalNeighbour(pages, sel.focus, 1);
+      if (k.startsWith("Arrow")) {
+        ev.preventDefault();
+        if (to) setSel(ev.shiftKey ? { anchor: sel.anchor, focus: to } : { anchor: to, focus: to });
+        return;
+      }
+      if (k === "Enter") {
+        ev.preventDefault();
+        select(sel.focus);
+        setEntry({ barId: sel.focus });
+      } else if (/^[a-gA-G%nN]$/.test(k)) {
+        // Typing a chord over a selected bar replaces it, as typing over a selected cell does.
+        ev.preventDefault();
+        select(sel.focus);
+        setEntry({ barId: sel.focus, seed: k });
+      } else if (k === "Backspace" || k === "Delete") {
+        ev.preventDefault();
+        edit((s) => clearChords(s, ids));
+      } else if (k === "Escape") {
+        setSel(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [store, selected, song]);
+  }, [store, sel, ids, song, pages, edit]);
 
-  const sel = selected;
-  const ref = sel ? findBar(song, sel) : null;
-  const sectionId = ref ? song.sections[ref.section]!.id : null;
-  const onBar = (patch: Partial<Omit<Bar, "id">>) => sel && edit((s) => updateBar(s, sel, patch));
-  const bar = barOf(song, sel);
+  const firstSection = ids[0] ? findBar(song, ids[0])?.section : undefined;
+  const activeSection = firstSection !== undefined ? song.sections[firstSection]!.id : null;
 
   const actions: InspectorActions = {
-    setBarPattern: (id) => onBar({ pattern: id }),
-    setSectionPattern: (id) => sectionId && edit((s) => updateSection(s, sectionId, { pattern: id })),
-    toggleRepeatStart: () => onBar({ repeatStart: bar?.repeatStart ? undefined : true }),
-    toggleRepeatEnd: () => onBar({ repeatEnd: bar?.repeatEnd ? undefined : { times: 2 } }),
-    setRepeatTimes: (n) => onBar({ repeatEnd: { times: Math.min(16, Math.max(2, n)) } }),
-    toggleEnding: (n) => {
-      const cur = bar?.ending ?? [];
-      const next = cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n].sort((a, b) => a - b);
-      onBar({ ending: next });
-    },
-    setMarker: (m) => onBar({ marker: m }),
-    setJump: (j) => onBar({ jump: j }),
+    openChords: () => sel && setEntry({ barId: sel.focus }),
+    setCue: (which, text) => ids[0] && edit((s) => updateBar(s, ids[0]!, { [which]: text })),
+    setRhythm: (pid) =>
+      edit((s) => {
+        // A whole section selected sets the section's rhythm. Otherwise each bar gets an override,
+        // or loses it when the pick is its section's own.
+        let out = s;
+        for (const sec of s.sections) {
+          const mine = sec.bars.filter((b) => selected.has(b.id));
+          if (mine.length === 0) continue;
+          if (mine.length === sec.bars.length) {
+            out = updateSection(out, sec.id, { pattern: pid });
+            out = updateBars(out, mine.map((b) => b.id), { pattern: undefined });
+          } else {
+            out = updateBars(out, mine.map((b) => b.id), { pattern: pid === sec.pattern ? undefined : pid });
+          }
+        }
+        return out;
+      }),
+    setRepeatStart: (on) => ids[0] && edit((s) => updateBar(s, ids[0]!, { repeatStart: on ? true : undefined })),
+    setRepeatEnd: (on) => ids[0] && edit((s) => updateBar(s, ids[ids.length - 1]!, { repeatEnd: on ? { times: 2 } : undefined })),
+    setRepeat: (on) => edit((s) => setRepeat(s, ids, on)),
+    setRepeatTimes: (n) => edit((s) => updateBar(s, ids[ids.length - 1]!, { repeatEnd: { times: Math.min(16, Math.max(2, n)) } })),
+    toggleEnding: (n) => edit((s) => toggleEnding(s, ids, n)),
+    setMarker: (m) => ids[0] && edit((s) => updateBar(s, ids[0]!, { marker: m })),
+    setJump: (j) => ids[0] && edit((s) => updateBar(s, ids[0]!, { jump: j })),
     insertBar: (before) => {
-      if (!sel) return;
-      const r = insertBar(song, sel, before);
+      const at = before ? ids[0] : ids[ids.length - 1];
+      if (!at) return;
+      const r = insertBar(song, at, before);
       edit(() => r.song);
-      setSelected(r.id);
+      select(r.id);
     },
-    deleteBar: () => {
-      if (!sel) return;
-      const flat = allBars(song);
-      const i = flat.findIndex((x) => x.bar.id === sel);
-      const next = flat[i + 1]?.ref.section === ref?.section ? flat[i + 1] : flat[i - 1];
-      edit((s) => deleteBar(s, sel));
-      setSelected(next?.bar.id ?? null);
+    deleteBars: () => {
+      const flat = allBars(song).map((x) => x.bar.id);
+      const after = flat[flat.indexOf(ids[ids.length - 1]!) + 1] ?? flat[flat.indexOf(ids[0]!) - 1];
+      edit((s) => deleteBars(s, ids));
+      if (after) select(after);
+      else setSel(null);
     },
-    renameSection: () => sectionId && setEditing({ kind: "label", sectionId }),
-    moveSection: (by) => sectionId && edit((s) => moveSection(s, sectionId, by)),
-    duplicateSection: () => {
-      if (!sectionId) return;
-      const r = duplicateSection(song, sectionId);
+  };
+
+  const form: FormActions = {
+    select: (id) => {
+      const s = song.sections.find((x) => x.id === id);
+      if (s) setSel({ anchor: s.bars[0]!.id, focus: s.bars[s.bars.length - 1]!.id });
+    },
+    rename: (id, name) => edit((s) => updateSection(s, id, { name })),
+    setBars: (id, n) => edit((s) => setBarCount(s, id, n)),
+    move: (id, by) => edit((s) => moveSection(s, id, by)),
+    duplicate: (id) => {
+      const r = duplicateSection(song, id);
       if (!r) return;
       edit(() => r.song);
-      setSelected(r.section.bars[0]!.id);
+      setSel({ anchor: r.section.bars[0]!.id, focus: r.section.bars[r.section.bars.length - 1]!.id });
     },
-    deleteSection: () => {
-      if (!sectionId) return;
-      edit((s) => deleteSection(s, sectionId));
-      setSelected(null);
+    remove: (id) => {
+      edit((s) => deleteSection(s, id));
+      setSel(null);
     },
-    addSection: (name) => {
-      const after = ref ? ref.section : song.sections.length - 1;
+    add: (name) => {
+      const after = firstSection ?? song.sections.length - 1;
       const r = addSection(song, after, name);
       edit(() => r.song);
-      setSelected(r.section.bars[0]!.id);
-      setEditing({ kind: "chord", barId: r.section.bars[0]!.id });
+      // Straight into its first bar, box open: the next thing to do is type its chords.
+      select(r.section.bars[0]!.id);
+      setEntry({ barId: r.section.bars[0]!.id });
     },
   };
 
@@ -202,12 +275,13 @@ export function App() {
         }
       />
       <div className="workspace">
+        <FormPanel song={song} active={activeSection} a={form} />
         <main
           className="scroller"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
-              setSelected(null);
-              setEditing(null);
+              setSel(null);
+              setEntry(null);
             }
           }}
         >
@@ -216,17 +290,27 @@ export function App() {
               song={song}
               pages={pages}
               selected={selected}
-              editing={editing}
-              error={null}
-              onSelect={setSelected}
-              onEdit={setEditing}
-              onClose={(e) => setEditing((cur) => (cur && JSON.stringify(cur) === JSON.stringify(e) ? null : cur))}
-              onCommit={onCommit}
-              initialValue={initialValue}
+              focus={sel?.focus ?? null}
+              entry={entry}
+              editingMeta={meta}
+              onPress={(id, extend) => {
+                setEntry(null);
+                setSel((cur) => (extend && cur ? { anchor: cur.anchor, focus: id } : { anchor: id, focus: id }));
+              }}
+              onOpen={onOpen}
+              chordText={chordText}
+              onCommitChords={onCommitChords}
+              onCancelEntry={() => setEntry(null)}
+              onEditMeta={setMeta}
+              onCommitMeta={(which, v) => {
+                const text = v.trim();
+                if (text !== song[which]) edit((s) => ({ ...s, [which]: text }));
+                setMeta(null);
+              }}
             />
           )}
         </main>
-        <Inspector song={song} barId={selected} a={actions} />
+        <Inspector song={song} ids={ids} chordsText={sel ? chordText(sel.focus) : ""} focusCue={focusCue} onCueFocused={() => setFocusCue(null)} a={actions} />
       </div>
     </div>
   );

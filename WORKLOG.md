@@ -220,3 +220,103 @@ on 5193's origin, separate from the agents' on 5194.
 **Why:** His instruction.
 
 **Open:** His verdict after trying it.
+
+---
+
+## 2026-10-23 — Claude — decision 5: the editor is clunky — redesign it to make sense, own design choices, check online
+
+**Type:** decision
+**Files:** none — recorded before any code moved
+**Did:** Omkar, verbatim:
+
+> *"clicking the bar opens chords and chord area also opens chords, and in genral its clunky, *
+>
+> *I gave you the chart as a refrence of the product, but I need you to make it in a way that makes sense*
+>
+> *Make your own design chooices and make it make sense (check online)"*
+
+**The measurement:** clicking a bar opens the chord box over the bar
+(`Sheet.tsx`, the staff `hit` rect calls `onEdit({kind:"chord"})`). Clicking the chord row above it
+opens the same box (the `slot` rect). So two targets do one thing, and nothing on the page just
+selects. Every click opens a text box and a 430-px palette, which covers the next system.
+
+**Inference, marked as inference:**
+- "The chart as a reference of the product" means the PDF defines *what* a chart contains and how
+  it prints. It does not define how editing works, so the editor may look and behave unlike a page
+  of MuseScore.
+- The printed output should still look like the PDF. He criticised the editing, not the engraving.
+- "Check online" means study how dedicated chart editors (iReal Pro, Sibelius/Dorico/MuseScore chord
+  entry, lead-sheet tools) handle entry, and cite what is borrowed.
+
+**Why:** His instruction.
+
+**Open:** Whether the printed look should change too.
+
+---
+
+## 2026-10-23 — Claude — work: editor redesigned to decision 5 — select, type, Form panel, selection inspector
+
+**Type:** work
+**Files:** `src/ui/Sheet.tsx` (rewritten), `src/ui/Inspector.tsx` (rewritten), `src/ui/FormPanel.tsx`
+(new), `src/ui/suggest.ts` + `suggest.test.ts` (new), `src/ui/ChordPalette.tsx` (deleted),
+`src/App.tsx` (rewritten), `src/styles.css`, `src/core/song.ts` (range edits), `src/core/core.test.ts`,
+`skills/user-scenarios/chart-editor.md`, `CLAUDE.md`, `NEXT.md`
+**Did:** Researched how dedicated editors do it:
+- iReal Pro's editor ([irealpro.com/learn/edit-a-song](https://www.irealpro.com/learn/edit-a-song)):
+  click a measure and type the chord, Return moves along, and barline, ending, symbol and text
+  controls act on the selection. Shift+arrows select. % repeats a bar.
+- Dorico's chord popover ([steinberg.help](https://www.steinberg.help/r/dorico-pro/5.1/en/dorico/topics/write_mode/write_mode_notations_input/write_mode_chord_symbols_inputting_t.html)):
+  stays open and advances by beat (Space) or by bar (Tab).
+- MuseScore 4 ([handbook](https://musescore.org/en/handbook/4/chord-symbols)): Ctrl+K, then Space
+  or ; to advance.
+- MultiTracks ChartBuilder: a song map beside the chart.
+
+Design that came of it:
+- **One target per bar.** It used to be three overlapping ones. A click only selects, shift
+  extends, and arrows move (↑/↓ go to the nearest bar in the adjacent system).
+- **Type to enter.** A chord letter, % or N over a selection opens the box holding that key, and
+  Enter/double-click opens it with the bar's text selected. Enter/Tab stores and opens the next bar.
+- **Suggestions narrow as you type**, up to 7: the song's chords by use, then the key's, then common
+  qualities on the typed root. This replaces the 430-px palette of every chip, which covered the
+  next system.
+- **The inspector acts on the selection.** Rhythm, a one-press repeat over a range ("|: 9–12 :|" with
+  ×N), endings and bar insert/delete. Cue fields, signs and jumps are drawn only for a single bar
+  (§7.2). A double-click above or below a bar focuses that cue field.
+- **The Form panel** lists sections with their first bar number and bar count (− +). Double-click
+  renames, the row in use shows ↑ ↓ ⧉ ×, and "+ Section" chips add after the selection and open entry.
+- **⌘C/⌘V** copy chords, the drawn rhythm and cues, not repeat signs or endings. ⌫ clears chords.
+- Page scale 1.45 → 1.3, so Form (220) + page (796) + inspector (260) fit a 1338-px pane without
+  sideways scroll.
+
+**Verified:**
+
+```
+npm run check
+EXIT=0 — verify-repo 5 checks passed, 53 tests in 4 files, tsc -b clean
+```
+
+Pane on 5194 (his 5193 untouched), real key events:
+- Click bar 2: selected, nothing opened ("Bar 2 · Intro").
+- `e`: box "e" with E suggestions. ↓ Return took Emaj9. ` f#` Return stored "Emaj9 F♯", and bar 3
+  opened with its text selected (selection 0–7).
+- `%` Tab copied bar 2.
+- Shift-click 9 → 12 gave "Bars 9–12". One press of "|: 9–12 :|" put |: on 9 and :| on 12, with 2×.
+- Form → Melody selected 23–26. Slashes set `section.pattern = "slashes"` with no bar overrides.
+- Double-click under bar 24 focused Below. "Bass walks up" was stored and drawn.
+- 23–26 ⌘C, then bar 27 ⌘V: 27–30 got the cues and kept |:. ⌫ took chords to 0,0,0,0, and bar 31
+  was untouched.
+- "+ Pre-Chorus" appended and opened entry in bar 74. `a`, `f#m7 e` stored.
+- Form + went from 4 to 5 bars. Renaming to "Build" drew "Build:", and ⌘Z restored "Pre-Chorus".
+- No console errors. The scroller had no horizontal overflow at 1338 px.
+- The print rules applied on screen hid the Form panel, inspector, top bar and edit layer, and drew
+  4 pages at 816×1056.
+
+Defects the walk found, and fixed:
+- The hover stole the suggestion highlight.
+- A stale focus request trapped keys in the cue field.
+- Paste dropped the drawn rhythm. Now tested.
+
+**Open:** He hasn't tried it. There is no on-screen key help (`NEXT.md` 5). The printed look is
+unchanged from decision 3, because he criticised editing, not engraving. That reading is inference,
+recorded in decision 5. Space-to-advance-by-beat (Dorico) is not done: Space separates chords, and
+even slots divide the bar.
