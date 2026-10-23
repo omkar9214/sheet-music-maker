@@ -320,3 +320,15 @@ Defects the walk found, and fixed:
 unchanged from decision 3, because he criticised editing, not engraving. That reading is inference,
 recorded in decision 5. Space-to-advance-by-beat (Dorico) is not done: Space separates chords, and
 even slots divide the bar.
+
+---
+
+## 2026-10-23 — Claude — correction: test count in the decision-5 work entry
+
+**Type:** correction
+**Files:** none
+**Did:** The work entry above says "53 tests in 4 files". The gate printed **49 tests in 4 files**.
+The 53 was written before the run and was never measured. Nothing else in that entry depends on
+the number.
+
+**Verified:** `npx vitest run` → Test Files 4 passed, Tests 49 passed.
