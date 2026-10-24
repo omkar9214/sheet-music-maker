@@ -763,3 +763,23 @@ curl https://omkar9214.github.io/sheet-music-maker/ → 200
 - The share link was not driven on the live origin. It builds from `window.location`, so it should
   carry the Pages URL. Not measured.
 - Actions warns that Node 20 actions are deprecated (checkout/setup-node v4). It still deploys.
+
+---
+
+## 2026-10-24 — Claude — decision 13: on the live site, each user's own device holds their charts
+
+**Type:** decision
+**Files:** none — confirms existing behaviour, no code moved
+**Did:** Omkar, verbatim:
+
+> *"storage of user will be used, not my storage, will local to the device it is opened in"*
+
+**Inference, marked as inference:** He is ruling that this is the intended model, not asking for a
+change. That is how it already works. Charts live in `localStorage` (`smm.library.v1`), per browser
+and per origin, so every visitor to the Pages site has their own library on their own device.
+Nothing is shared between users or devices except by chart file or share link. §6 "no backend"
+stands.
+
+**Why:** His instruction.
+
+**Open:** None.
