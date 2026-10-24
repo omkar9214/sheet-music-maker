@@ -732,3 +732,34 @@ EXIT=0 — verify-repo passed, 103 tests in 8 files, tsc -b clean
 **Open:** None. Asked in the same session, which visibility ("Public, PDF removed" recommended).
 He chose **"Public, everything"**: the repo is `omkar9214/sheet-music-maker`, public, with the
 reference PDF and every doc. The name was the recommended default, and he did not change it.
+
+---
+
+## 2026-10-24 — Claude — work: published on GitHub Pages (decision 12)
+
+**Type:** work
+**Files:** `vite.config.ts` (`base: "./"`), `.github/workflows/pages.yml` (new), `NEXT.md`
+**Did:** Created `github.com/omkar9214/sheet-music-maker` (public, his choice) with `origin` set, and
+pushed `main`. Pages is set to deploy from the workflow, which runs `npm run check` before
+`npm run build`, so a red tree is never published. Every push to `main` now redeploys.
+**From now on, `git push` publishes the site.** The CLAUDE.md rule still holds: push only when he asks.
+
+**Verified:**
+
+```
+npm run check
+EXIT=0 — 103 tests in 8 files
+gh run view 40074423037 → success (build success, deploy success)
+curl https://omkar9214.github.io/sheet-music-maker/ → 200
+```
+
+- Browser, live site: 3 pages and 73 bars drawn, Leland and Edwin loaded, no console errors.
+  Bars per line, from the live DOM: max 4 (decision 11 holds online).
+- Screenshot taken of page 1.
+
+**Open:**
+- Charts saved on localhost (5193/5194) are not online. localStorage is per origin, so move them
+  with Charts ▾ → Chart file or Copy link.
+- The share link was not driven on the live origin. It builds from `window.location`, so it should
+  carry the Pages URL. Not measured.
+- Actions warns that Node 20 actions are deprecated (checkout/setup-node v4). It still deploys.

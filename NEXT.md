@@ -2,7 +2,9 @@
 
 The live queue, in order. Meant to be edited — unlike `WORKLOG.md`.
 
-Branch: `main`, no remote. §0 is written (decisions 2–3). The editor was redesigned in decision 5
+Branch: `main`, remote `origin` = github.com/omkar9214/sheet-music-maker (public, decision 12).
+**Live at https://omkar9214.github.io/sheet-music-maker/**: every push to `main` redeploys, behind the gate.
+Push only when he asks. §0 is written (decisions 2–3). The editor was redesigned in decision 5
 (select, type, the Form panel, a selection-scoped inspector).
 
 ## Now
