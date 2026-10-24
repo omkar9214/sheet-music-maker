@@ -10,7 +10,7 @@
  *   ⌫         clear chords            ⌘C / ⌘V     copy / paste bars
  *   Esc       deselect                ⌘Z / ⇧⌘Z    undo / redo
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { barText, chordCells, type ChordView } from "./core/chord";
 import { barContexts, type BarContext } from "./core/context";
 import { concertKey, partSong, type Part } from "./core/part";
@@ -24,6 +24,8 @@ import {
 } from "./core/song";
 import { FormPanel, type FormActions } from "./ui/FormPanel";
 import { Inspector, type InspectorActions } from "./ui/Inspector";
+import { readWidths, writeWidths, type PanelWidths } from "./ui/panels";
+import { Resizer } from "./ui/Resizer";
 import { Sheet, type Entry, type Zone } from "./ui/Sheet";
 import { TopBar } from "./ui/TopBar";
 import { layoutSong, type PageLayout } from "./ui/engrave/layout";
@@ -75,6 +77,8 @@ export function App() {
   const [focusCue, setFocusCue] = useState<{ which: "above" | "below"; n: number } | null>(null);
   const [{ view, part }, setViewState] = useState(loadView);
   const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
+  const [widths, setWidths] = useState<PanelWidths>(() => readWidths(window.localStorage));
+  useEffect(() => writeWidths(window.localStorage, widths), [widths]);
   const clipboard = useRef<BarClip[]>([]);
 
   const setView = (next: { view: ChordView; part: Part }) => {
@@ -397,8 +401,12 @@ export function App() {
           })
         }
       />
-      <div className="workspace">
+      <div
+        className="workspace"
+        style={{ "--form-w": `${widths.form}px`, "--insp-w": `${widths.inspector}px` } as CSSProperties}
+      >
         <FormPanel song={song} active={activeSection} a={form} />
+        <Resizer side="form" width={widths.form} onChange={(w) => setWidths((x) => ({ ...x, form: w }))} />
         <main
           className="scroller"
           onMouseDown={(e) => {
@@ -434,6 +442,7 @@ export function App() {
             />
           )}
         </main>
+        <Resizer side="inspector" width={widths.inspector} onChange={(w) => setWidths((x) => ({ ...x, inspector: w }))} />
         <Inspector
           song={song}
           ids={ids}

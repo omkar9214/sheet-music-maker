@@ -83,7 +83,7 @@ button { font: inherit; color: inherit; }
 .page-svg { display: block; }
 
 .inspector {
-  width: 300px; flex: none; overflow: auto; background: var(--panel); border-left: 1px solid var(--line);
+  width: var(--insp-w, 300px); flex: none; overflow: auto; background: var(--panel); border-left: 1px solid var(--line);
   padding: 14px; display: flex; flex-direction: column; gap: 10px;
 }
 .inspector.empty { background: var(--bg); border-left-color: transparent; }
@@ -107,7 +107,7 @@ button { font: inherit; color: inherit; }
 
 /* Form panel: the song map. */
 .form-panel {
-  width: 220px; flex: none; overflow: auto; background: var(--panel); border-right: 1px solid var(--line);
+  width: var(--form-w, 220px); flex: none; overflow: auto; background: var(--panel); border-right: 1px solid var(--line);
   padding: 14px 10px; display: flex; flex-direction: column; gap: 8px; min-height: 0;
 }
 .form-panel h3 { margin: 0 4px 2px; font-size: 14px; font-weight: 600; }
@@ -224,10 +224,27 @@ button { font: inherit; color: inherit; }
 @page { size: letter; margin: 0; }
 @media print {
   html, body, #root, .app, .workspace, .scroller { height: auto; overflow: visible; background: #fff; }
-  .topbar, .inspector, .form-panel, .edit-layer, .cells, .meta-input, .part-badge, .toast { display: none !important; }
+  .topbar, .inspector, .form-panel, .resizer, .edit-layer, .cells, .meta-input, .part-badge, .toast { display: none !important; }
   .scroller { padding: 0; }
   .sheet { gap: 0; width: auto; }
   .page { box-shadow: none; width: 8.5in !important; height: 11in !important; break-after: page; overflow: hidden; }
   .page:last-child { break-after: auto; }
   .page-svg { width: 8.5in; height: 11in; }
 }
+
+/* Sidebar handles (decision 14). A 9px hit zone sits over the 1px border, drawn only on hover/drag,
+   so the chrome stays quiet. Negative margins keep it from taking width from the page. */
+.resizer { flex: none; width: 9px; margin: 0 -4px; position: relative; z-index: 5; cursor: col-resize; touch-action: none; }
+.resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: transparent; transition: background 120ms; }
+.resizer:hover::after, body.resizing .resizer::after { background: var(--accent); width: 2px; left: 3.5px; }
+body.resizing { cursor: col-resize; user-select: none; }
+
+/* Scrollbars (decision 14: "make the scorll bar asthetic"). Thin, rounded, the app's line colour,
+   darker on hover; the track is the surface it scrolls. Firefox and current Chromium/Safari read
+   scrollbar-*; older WebKit reads ::-webkit-scrollbar. */
+* { scrollbar-width: thin; scrollbar-color: rgba(29, 27, 24, 0.22) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(29, 27, 24, 0.2); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background-color: rgba(29, 27, 24, 0.38); }
+*::-webkit-scrollbar-corner { background: transparent; }

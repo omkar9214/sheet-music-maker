@@ -7,7 +7,8 @@
 import { useState } from "react";
 import type { Section, Song } from "../core/song";
 
-export const SECTION_NAMES = ["Intro", "Verse", "Pre-Chorus", "Chorus", "Bridge", "Solo", "Interlude", "Outro"];
+// "Instrumental" asked for in decision 14.
+export const SECTION_NAMES = ["Intro", "Verse", "Pre-Chorus", "Chorus", "Bridge", "Solo", "Instrumental", "Interlude", "Outro"];
 
 export interface FormActions {
   select: (sectionId: string) => void;

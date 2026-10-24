@@ -783,3 +783,70 @@ stands.
 **Why:** His instruction.
 
 **Open:** None.
+
+---
+
+## 2026-10-24 — Claude — decision 14: an Instrumental section, resizable sidebars, nicer scrollbars; his score is in use
+
+**Type:** decision
+**Files:** none — recorded before any code moved
+**Did:** Omkar, verbatim:
+
+> *"In the form, there should be a instrumental section as well, size bars should be resizable, make the scorll bar asthetic, in my browser I am working on a score preserve that"*
+
+**Inference, marked as inference:**
+- "instrumental section": a **+ Instrumental** button among the Form panel's section presets
+  (`SECTION_NAMES`), the same as + Solo or + Interlude.
+- "size bars" read as **side bars**: the Form panel (left) and the inspector (right) get a drag
+  handle on their inner edge. The widths are remembered per browser under their own localStorage
+  key, never inside the chart library. Not confirmed that he did not mean the bars of the score.
+- "make the scorll bar asthetic": thin, rounded, low-contrast scrollbars on every scrolling area
+  (the page, both panels, popovers), in the app's own tokens.
+- "in my browser I am working on a score preserve that": his open score must survive. Nothing
+  touches 5193, 5194 or the live site's storage. Testing is on 5195 only, with `tabId` named on
+  every call (decision 12's slip was a call without one). No change to the saved chart format, so
+  his library loads unchanged after the update.
+
+**Why:** His instruction.
+
+**Open:** Whether "size bars" meant side bars (assumed).
+
+---
+
+## 2026-10-24 — Claude — work: + Instrumental, resizable sidebars, thin scrollbars (decision 14)
+
+**Type:** work
+**Files:** `src/ui/FormPanel.tsx` (`SECTION_NAMES`), `src/ui/panels.ts` + `panels.test.ts` (new),
+`src/ui/Resizer.tsx` (new), `src/App.tsx`, `src/styles.css`
+**Did:**
+- **+ Instrumental** sits among the section chips, between Solo and Interlude.
+- **Sidebars:** a 9 px handle on each panel's inner edge (blue on hover), drag to resize, double-click
+  to reset. Limits: Form 170–420 px, inspector 260–560 px. The defaults are the old 220 and 300. Widths
+  are kept in `smm.panels`, a separate key, and never in `smm.library.v1`. The page is not squeezed
+  (§5.7): when it gets narrow it scrolls sideways. Handles are hidden in print.
+- **Scrollbars:** thin, rounded, translucent ink with a transparent track (`scrollbar-*` plus
+  `::-webkit-scrollbar`).
+- **Caught in the browser (§9.3):** the handle's class `inspector` matched `.inspector` and took its
+  14 px padding, making it 29 px wide. It is renamed to `resizer-<side>`.
+- **His score preserved:** no change to the chart format, and nothing ran on 5193, 5194 or the live
+  site. Every browser call named 5195's tab and threw if the port was not 5195.
+
+**Verified:**
+
+```
+npm run check
+EXIT=0 — 107 tests in 9 files
+```
+
+- Browser, 5195, live DOM: the chips include "+ Instrumental". A real pointer drag took Form 220 → 333
+  and the inspector 300 → 445, saved as `{"form":333,"inspector":445}`. Both survived a reload, and a
+  double-click reset both to 220 / 300. The scroller's scrollbar is 11 px, `scrollbar-color`
+  rgba(29,27,24,.22) on transparent. Screenshots: both panels widened, and after the reset.
+- + Instrumental added and drew "Instrumental:" on the page. Esc then ⌘Z removed it. The library went
+  back to 12094 chars, exactly what it was before the session.
+
+**Open:**
+- **Found, not fixed (pre-existing):** right after + Section, the chord boxes are open with focus in
+  "Beat 1", so ⌘Z goes to the empty input and does nothing. You need Esc first. In `NEXT.md`.
+- "size bars" read as side bars: not confirmed.
+- Not pushed, so the live site does not have this yet.

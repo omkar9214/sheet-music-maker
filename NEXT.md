@@ -19,6 +19,10 @@ Push only when he asks. §0 is written (decisions 2–3). The editor was redesig
 
 ## Known gaps, in the order they will probably hurt
 
+0. **⌘Z right after + Section does nothing** (found 2026-10-24, decision 14's walk). The new section
+   opens its chord boxes with focus in Beat 1, and the input takes ⌘Z. Esc first works. Likely fix:
+   ⌘Z in boxes nobody has typed in closes them and undoes the edit.
+
 2. **Spacing is not MuseScore's.** Systems are not spread to fill the page (MuseScore does that),
    so page 1 ends with white space, and Melody falls to page 2 where the PDF has it on page 1.
    Measure against the PDF before tuning (`src/ui/engrave/metrics.ts` says which numbers are
