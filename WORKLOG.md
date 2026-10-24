@@ -963,3 +963,92 @@ curl https://omkar9214.github.io/sheet-music-maker/ → assets/index-CGNYBCA6.js
 ```
 
 **Open:** This entry is committed locally only, because pushing it would redeploy for no change.
+
+---
+
+## 2026-10-25 — Claude — decision 18: solid on phones and tablets
+
+**Type:** decision
+**Files:** none — recorded before any code moved
+**Did:** Omkar asked a question (answered, no code moved), verbatim:
+
+> *"What if I want to repeat a section 4 times??"*
+
+Answered: select the section in Form, press the |: n–m :| chip, then + to 4×. That was already built.
+
+Then, verbatim:
+
+> *"not compatible for phones etc, make it solid for android phones, ipads, iphones etc"*
+
+**Inference, marked as inference:**
+- The targets are phone portrait (~360–430 px), phone landscape, and iPad portrait and landscape
+  (~768–1366 px), in iOS Safari and Android Chrome. Touch is the only input, and there is no hardware
+  keyboard.
+- Every part of §0's loop has to be doable by touch: start a chart, lay out the form, enter chords,
+  set the rhythm, write cues, mark repeats, transpose, print/share.
+- He said "phones etc", not "a phone app": the desktop layout stays as it is.
+- The walk comes first (skills/user-scenarios), then the build. Details are decided in the work entry.
+
+**Why:** His instruction.
+
+**Open:** How the page is sized on a phone (see the work entry; §5.7 is involved).
+
+---
+
+## 2026-10-25 — Claude — work: phones and tablets (decision 18)
+
+**Type:** work
+**Files:** `src/ui/viewport.ts` + `viewport.test.ts` (new), `src/ui/Sheet.tsx` (`scale` prop, `fitScale`,
+touch tap-to-open, soft-keyboard handling), `src/App.tsx`, `src/ui/TopBar.tsx`, `src/ui/Inspector.tsx`,
+`src/styles.css`, `index.html`
+**Did:** Measured first: at 375×812 the layout was 817 px wide, the page was squeezed into a 32-px strip,
+and the inspector was off screen. Now, below 1100 px, or on a touch screen below 1366 px:
+- **The page fits the width** (`fitScale`, never above the desktop 1.3), and pinch-zoom is left on.
+  §5.7 says a narrow window scrolls rather than shrinks. That still holds on desktop. On phones, fitting
+  the page is what every PDF reader does. **Inference, to put to him:** §5.7 is his to rule on.
+- **The Form panel is a drawer** (a Form button at the top bar's left, a scrim). Picking a section or
+  + Section closes it.
+- **The inspector is a bottom sheet** (48 dvh, scrolls) that is there only while bars are selected,
+  with × to close. `scroll-padding-bottom` keeps the tapped bar above it.
+- **The top bar scrolls sideways.** Undo, redo and Print stay pinned. Menus hang from the bar, not the
+  scrolling strip, at the full width minus 8 px gutters.
+- **Touch:** a finger has no double-click, so a second tap on the selected bar opens it (above, chords
+  or below, by where you tap). The inspector's chord field was already a tap target. Popovers close on
+  `pointerdown`. `touch-action: manipulation` on controls.
+- **Soft keyboards:** Android sends no keydown for Space, so a space arriving in the value now moves
+  to the next beat. Also `autocapitalize`/`autocorrect` off ("m" vs "M"), `enterkeyhint="next"`, and
+  inputs at 16 px so iOS does not zoom on focus. On phones the chord boxes span the page.
+- **iOS chrome:** `viewport-fit=cover` with safe-area padding on the bar, drawer, sheet and page, `100dvh`,
+  and `theme-color`.
+- Found while building (§9.3): the Form rows were 76 px, because the hidden tools still reserved a
+  32-px row. They are now drawn only on the tapped row (42 px). An 1180-px iPad Air in landscape would
+  have kept the three columns with 660 px for a 796-px page, hence the touch threshold.
+
+**Verified:**
+
+```
+npm run check
+EXIT=0 — 110 tests in 10 files
+```
+
+Browser, 5195 only, with live-DOM numbers:
+- 375×812: document 375 wide (was 817), page 8→367 (359 px), no resizers. Tap a bar: the sheet is at
+  y 422, 375 wide, with no sideways overflow. A touch second tap (pointerType touch) opened the boxes,
+  focus on Beat 1 at 16 px, attrs off/off/next. The box spans the page, 8→367. "Em7 " via the input
+  event moved to Beat 2. Esc left the chart at 12094 chars. Drawer: 300 px with a scrim over the top
+  bar. Tapping Chorus closed it and the sheet showed "Bars 5–12". × hid the sheet with 0 selected. A bar
+  tapped at y 696 scrolled to 359–406, above the sheet. Key / Charts / Patterns / 4/4 / Part menus all
+  sit at 8→367 with no overflow, and a tap outside closes them.
+- 812×375 (phone landscape): page 785 of 812, top bar 602 px visible.
+- 768×1024 (iPad portrait): page 741 of 768, document 768.
+- Desktop 1502: unchanged at 220 / 796 / 300, no Form button. No console errors.
+- Screenshots at each size.
+
+**Open:**
+- **Not on a real device.** iOS Safari and Android Chrome behaviour (the soft keyboard over the sheet,
+  safe areas, pinch-zoom) was emulated only. The `(pointer: coarse)` branch, iPad landscape, could not
+  be emulated here.
+- Keyboard-only actions still have no touch equivalent: copy/paste bars (⌘C/⌘V) and multi-bar
+  selection by shift-click. Selecting a section in Form covers the common multi-bar case.
+- §5.7 on phones: the page is fitted, not scrolled. His ruling is needed.
+- Not pushed.

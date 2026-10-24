@@ -26,12 +26,13 @@ import { FormPanel, type FormActions } from "./ui/FormPanel";
 import { Inspector, type InspectorActions } from "./ui/Inspector";
 import { readWidths, writeWidths, type PanelWidths } from "./ui/panels";
 import { Resizer } from "./ui/Resizer";
-import { Sheet, type Entry, type Zone } from "./ui/Sheet";
+import { Sheet, fitScale, SCALE, type Entry, type Zone } from "./ui/Sheet";
 import { TopBar } from "./ui/TopBar";
 import { layoutSong, type PageLayout } from "./ui/engrave/layout";
 import { measureText, useFontsReady } from "./ui/engrave/measure";
 import { importFile, shareLink, takeSharedChart } from "./ui/sharing";
 import { useChartStore } from "./ui/store";
+import { useCompact, useWidth } from "./ui/viewport";
 
 interface Selection {
   anchor: string;
@@ -78,6 +79,16 @@ export function App() {
   const [{ view, part }, setViewState] = useState(loadView);
   const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
   const [widths, setWidths] = useState<PanelWidths>(() => readWidths(window.localStorage));
+  // Phones and tablets (decision 18): the Form panel is a drawer, the inspector a bottom sheet, and
+  // the page is fitted to the width.
+  const compact = useCompact();
+  const [formOpen, setFormOpen] = useState(false);
+  const scrollerRef = useRef<HTMLElement>(null);
+  const scrollerW = useWidth(scrollerRef);
+  const scale = compact && scrollerW > 0 ? fitScale(scrollerW) : SCALE;
+  useEffect(() => {
+    if (!compact) setFormOpen(false);
+  }, [compact]);
   useEffect(() => writeWidths(window.localStorage, widths), [widths]);
   const clipboard = useRef<BarClip[]>([]);
 
@@ -354,6 +365,8 @@ export function App() {
     select: (id) => {
       const s = song.sections.find((x) => x.id === id);
       if (s) setSel({ anchor: s.bars[0]!.id, focus: s.bars[s.bars.length - 1]!.id });
+      // In the drawer, picking a section is done with the drawer: the inspector sheet takes over.
+      setFormOpen(false);
     },
     rename: (id, name) => edit((s) => updateSection(s, id, { name })),
     setBars: (id, n) => edit((s) => setBarCount(s, id, n)),
@@ -375,6 +388,7 @@ export function App() {
       // Straight into its first bar, box open: the next thing to do is type its chords.
       select(r.section.bars[0]!.id);
       setEntry({ barId: r.section.bars[0]!.id });
+      setFormOpen(false);
     },
   };
 
@@ -382,6 +396,13 @@ export function App() {
     <div className="app">
       <TopBar
         store={store}
+        lead={
+          compact && (
+            <button className={formOpen ? "tb on" : "tb"} aria-expanded={formOpen} onClick={() => setFormOpen((o) => !o)}>
+              Form
+            </button>
+          )
+        }
         view={view}
         onView={(v) => setView({ view: v, part })}
         part={part}
@@ -402,12 +423,14 @@ export function App() {
         }
       />
       <div
-        className="workspace"
+        className={`workspace${compact ? " compact" : ""}${formOpen ? " form-open" : ""}${ids.length ? " has-sel" : ""}`}
         style={{ "--form-w": `${widths.form}px`, "--insp-w": `${widths.inspector}px` } as CSSProperties}
       >
         <FormPanel song={song} active={activeSection} a={form} />
-        <Resizer side="form" width={widths.form} onChange={(w) => setWidths((x) => ({ ...x, form: w }))} />
+        {compact && formOpen && <div className="drawer-scrim" onClick={() => setFormOpen(false)} />}
+        {!compact && <Resizer side="form" width={widths.form} onChange={(w) => setWidths((x) => ({ ...x, form: w }))} />}
         <main
+          ref={scrollerRef}
           className="scroller"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
@@ -419,6 +442,7 @@ export function App() {
           {part !== "concert" && <div className="part-badge">Part · {partLabel(part)}</div>}
           {fonts && (
             <Sheet
+              scale={scale}
               song={viewSong}
               pages={pages}
               selected={selected}
@@ -442,7 +466,7 @@ export function App() {
             />
           )}
         </main>
-        <Resizer side="inspector" width={widths.inspector} onChange={(w) => setWidths((x) => ({ ...x, inspector: w }))} />
+        {!compact && <Resizer side="inspector" width={widths.inspector} onChange={(w) => setWidths((x) => ({ ...x, inspector: w }))} />}
         <Inspector
           song={song}
           ids={ids}
@@ -452,6 +476,7 @@ export function App() {
           isFirstBar={ids[0] === flatIds[0]}
           focusCue={focusCue}
           onCueFocused={() => setFocusCue(null)}
+          {...(compact ? { onClose: () => { setSel(null); setEntry(null); } } : {})}
           a={actions}
         />
       </div>

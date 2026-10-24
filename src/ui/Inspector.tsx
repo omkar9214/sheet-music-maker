@@ -195,6 +195,8 @@ export function Inspector(props: {
   isFirstBar: boolean;
   focusCue: { which: "above" | "below"; n: number } | null;
   onCueFocused: () => void;
+  /** On a phone or tablet the inspector is a sheet over the page, and this closes it (decision 18). */
+  onClose?: () => void;
   a: InspectorActions;
 }) {
   const { song, ids, a } = props;
@@ -230,6 +232,7 @@ export function Inspector(props: {
       <h3>
         {one ? `Bar ${first.number}` : `Bars ${first.number}–${last.number}`}
         <span className="muted"> · {sectionName}</span>
+        {props.onClose && <button className="x sheet-close" aria-label="Close" onClick={props.onClose}>×</button>}
       </h3>
 
       {one && (

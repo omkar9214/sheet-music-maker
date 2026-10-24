@@ -20,7 +20,7 @@ export function Popover({ label, children, className }: { label: ReactNode; chil
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const off = (e: MouseEvent) => {
+    const off = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     // Escape closes the menu and stops there: captured first, so the editor's own Escape (deselect)
@@ -30,10 +30,12 @@ export function Popover({ label, children, className }: { label: ReactNode; chil
       e.stopImmediatePropagation();
       setOpen(false);
     };
-    window.addEventListener("mousedown", off);
+    // pointerdown, not mousedown: a tap fires mousedown only after it ends, and on some Android
+    // browsers not at all when the tap scrolls (decision 18).
+    window.addEventListener("pointerdown", off);
     window.addEventListener("keydown", esc, { capture: true });
     return () => {
-      window.removeEventListener("mousedown", off);
+      window.removeEventListener("pointerdown", off);
       window.removeEventListener("keydown", esc, { capture: true });
     };
   }, [open]);
@@ -75,6 +77,8 @@ const VIEWS: Array<[ChordView, string, string]> = [
 
 export function TopBar(props: {
   store: ChartStore;
+  /** The Form drawer's button, on a phone or tablet (decision 18). */
+  lead?: ReactNode;
   view: ChordView;
   onView: (v: ChordView) => void;
   part: Part;
@@ -99,6 +103,7 @@ export function TopBar(props: {
 
   return (
     <header className="topbar">
+      {props.lead}
       <input
         ref={fileInput}
         type="file"
@@ -110,6 +115,8 @@ export function TopBar(props: {
           e.target.value = "";
         }}
       />
+      {/* On a phone these scroll sideways under a finger; undo, redo and Print stay put (decision 18). */}
+      <div className="tb-scroll">
       <Popover label={<span className="chart-name">{song.title || "Untitled"} ▾</span>} className="charts">
         {(close) => (
           <div className="charts-panel">
@@ -232,7 +239,7 @@ export function TopBar(props: {
         {() => <PatternsPanel song={song} onChange={props.onPatterns} />}
       </Popover>
 
-      <span className="spacer" />
+      </div>
       {!store.saved && <span className="warn">Not saved</span>}
       <button className="tb" onClick={store.undo} disabled={!store.canUndo} title="Undo (⌘Z)">↶</button>
       <button className="tb" onClick={store.redo} disabled={!store.canRedo} title="Redo (⇧⌘Z)">↷</button>

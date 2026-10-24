@@ -21,10 +21,17 @@ import { suggest } from "./suggest";
 
 /**
  * Screen pixels per point. 1.3 makes the page 796 px wide, so the Form panel, the page and the
- * inspector fit side by side on a 1366-px laptop. A narrower window scrolls rather than shrinking
- * the page (non-negotiable 7).
+ * inspector fit side by side on a 1366-px laptop. A narrower desktop window scrolls rather than
+ * shrinking the page (non-negotiable 7). On a phone or tablet (decision 18) the page is fitted to the
+ * screen's width instead, as every PDF reader does, and pinch-zoom is left on: see `fitScale`.
  */
 export const SCALE = 1.3;
+const DESKTOP_SCALE = SCALE;
+
+/** The page fitted to `width` px of screen, never above the desktop scale. */
+export function fitScale(width: number): number {
+  return Math.min(SCALE, Math.max(0.1, width / PAGE_W));
+}
 
 export type Zone = "above" | "chord" | "below";
 
@@ -49,6 +56,8 @@ interface Props {
   onCancelEntry: () => void;
   onEditMeta: (which: "title" | "source" | null) => void;
   onCommitMeta: (which: "title" | "source", value: string) => void;
+  /** Screen pixels per point. SCALE on a desktop, fitted to the width on a phone or tablet. */
+  scale?: number;
 }
 
 /** A bar's whole column, from its highest row above to its lowest below: one target, no overlaps. */
@@ -238,10 +247,21 @@ function ChordCells(props: {
               value={c}
               spellCheck={false}
               autoComplete="off"
+              // Phones (decision 18): no capitalising ("m" is minor, "M" would read as major), no
+              // autocorrect, and the return key labelled for what Enter does here.
+              autoCapitalize="off"
+              autoCorrect="off"
+              enterKeyHint="next"
               aria-label={`Beat ${label(i)}`}
               style={{ fontFamily: TEXT_FONT }}
               onFocus={() => i !== active && setActive(i)}
-              onChange={(e) => set(e.target.value.replace(/\s+/g, ""))}
+              onChange={(e) => {
+                // Android's soft keyboard sends no usable keydown for Space (key "Unidentified"), so
+                // the space only shows up here, in the value. It still means "next beat".
+                const v = e.target.value;
+                set(v.replace(/\s+/g, ""));
+                if (/\s/.test(v) && i < cells.length - 1) go(i + 1);
+              }}
               onKeyDown={(e) => onKey(e, i)}
             />
           </label>
@@ -266,6 +286,8 @@ function ChordCells(props: {
   );
 }
 
+/** iOS Safari zooms the whole page into any input under 16 px when it takes focus, and on a fitted
+ * phone page the title's own size is about 12 px. So the box never goes below 16 (decision 18). */
 function MetaEdit(props: {
   initial: string;
   left: number;
@@ -273,6 +295,7 @@ function MetaEdit(props: {
   width: number;
   size: number;
   align: "center" | "right";
+  scale: number;
   onDone: (v: string | null) => void;
 }) {
   const [v, setV] = useState(props.initial);
@@ -291,7 +314,7 @@ function MetaEdit(props: {
     <input
       ref={ref}
       className="meta-input"
-      style={{ left: props.left, top: props.top, width: props.width, fontFamily: TEXT_FONT, fontSize: props.size * SCALE, textAlign: props.align }}
+      style={{ left: props.left, top: props.top, width: props.width, fontFamily: TEXT_FONT, fontSize: Math.max(16, props.size * props.scale), textAlign: props.align }}
       value={v}
       onChange={(e) => setV(e.target.value)}
       onKeyDown={(e) => {
@@ -305,7 +328,11 @@ function MetaEdit(props: {
 
 export function Sheet(props: Props) {
   const { pages, song, selected, focus, entry } = props;
+  const SCALE = props.scale ?? DESKTOP_SCALE;
   const root = useRef<HTMLDivElement>(null);
+  // The kind of pointer that started the press. A finger has no double-click (iOS and Android zoom or
+  // ignore a double-tap), so on touch a second tap on the bar already selected opens it.
+  const pointer = useRef<string>("mouse");
 
   // Keep the bar being worked on in view as entry and the arrow keys move through the chart.
   useEffect(() => {
@@ -361,11 +388,18 @@ export function Sheet(props: Props) {
                       y={c.y}
                       width={c.w}
                       height={c.h}
+                      onPointerDown={(e) => {
+                        pointer.current = e.pointerType;
+                      }}
                       onMouseDown={(e) => {
                         // Keeps focus where it is (an open chord box commits on its own blur only when
                         // the click lands elsewhere), and stops a drag from selecting page text.
                         e.preventDefault();
                         (document.activeElement as HTMLElement | null)?.blur();
+                        if (pointer.current !== "mouse" && focus === b.bar.id && selected.size === 1 && !entry) {
+                          onDouble(e, s, b);
+                          return;
+                        }
                         props.onPress(b.bar.id, e.shiftKey);
                       }}
                       onDoubleClick={(e) => onDouble(e, s, b)}
@@ -383,7 +417,7 @@ export function Sheet(props: Props) {
               initial={props.cellsOf(entry.barId)}
               {...(entry.seed !== undefined ? { seed: entry.seed } : {})}
               beatTicks={beatTicks(at.b.ctx.time)}
-              left={Math.min(at.b.x * SCALE, PAGE_W * SCALE - 300)}
+              left={Math.max(0, Math.min(at.b.x * SCALE, PAGE_W * SCALE - 300))}
               top={(barColumn(at.s, at.b).y + barColumn(at.s, at.b).h) * SCALE + 2}
               onCommit={(c, t, move) => props.onCommitCells(entry.barId, c, t, move)}
               onCancel={props.onCancelEntry}
@@ -397,6 +431,7 @@ export function Sheet(props: Props) {
               width={(PAGE_W - 2 * MARGIN_X - 120) * SCALE}
               size={SIZE.title}
               align="center"
+              scale={SCALE}
               onDone={(v) => (v === null ? props.onEditMeta(null) : props.onCommitMeta("title", v))}
             />
           )}
@@ -408,6 +443,7 @@ export function Sheet(props: Props) {
               width={180 * SCALE}
               size={SIZE.source}
               align="right"
+              scale={SCALE}
               onDone={(v) => (v === null ? props.onEditMeta(null) : props.onCommitMeta("source", v))}
             />
           )}
