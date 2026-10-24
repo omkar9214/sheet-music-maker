@@ -1052,3 +1052,19 @@ Browser, 5195 only, with live-DOM numbers:
   selection by shift-click. Selecting a section in Form covers the common multi-bar case.
 - §5.7 on phones: the page is fitted, not scrolled. His ruling is needed.
 - Not pushed.
+
+---
+
+## 2026-10-25 — Claude — decision 19: push decision 18 live
+
+**Type:** decision
+**Files:** none
+**Did:** Omkar, verbatim:
+
+> *"Push to GitHub so the live site updates."*
+
+**Inference, marked as inference:** This covers this push only.
+
+**Why:** His instruction.
+
+**Open:** None.
