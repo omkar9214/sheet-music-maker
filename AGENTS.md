@@ -34,7 +34,9 @@ exactly like a traditional chart"** means it should look like that PDF.
    - Rhythm is notated, but not note by note **[R]**: it is slash rhythm, as in the reference.
      **Pattern stamps [R, decision 3]**: a few named patterns per song, one set per section,
      overridden per bar.
-   - Individual notes may come "on the second pass" **[R]**, and that is not MVP.
+   - Individual notes may come "on the second pass" **[R]**, and that is not MVP. **Now asked for
+     [R, decision 8]**: written per bar in place of the slashes, entered from a palette at the
+     bottom of the left sidebar.
 3. **What comes out.** A traditional chart drawn on screen **[R]**:
    - title and source line, tempo, time signature, key signature
    - section labels and bar numbers
@@ -42,7 +44,8 @@ exactly like a traditional chart"** means it should look like that PDF.
    - chord symbols and slash rhythm
    - repeat signs, 1st–4th endings, coda, and "N×" counts **[R]**
 
-   **Print/PDF [R, decision 3]**. No MusicXML. Playback is not asked for, so there is none
+   **Print/PDF [R, decision 3]**. MusicXML **export** [R, decision 8; it was "No MusicXML" in
+   decision 3]. A chart file, a share link and ChordPro go in and out [I, decision 7]. Playback is not asked for, so there is none
    **[I]**.
 4. **Instrument.** The reference is guitar, treble clef 8vb. **Transposition is the core reason
    chords are picked rather than typed [R]**: change the key from F♯ to A and *everything* moves

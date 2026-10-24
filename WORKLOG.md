@@ -421,3 +421,57 @@ EXIT=0 — verify-repo 5 checks passed, 65 tests in 5 files, tsc -b clean
 
 **Open:** He hasn't tried it. Pushes between beats can't be entered (`NEXT.md` 6). Rhythm grids have
 no keyboard control. 6/8 and 12/8 were checked in unit tests only, not in the browser.
+
+---
+
+## 2026-10-24 — Claude — decision 7: import/sharing, key changes and all harmonic possibilities, notes, researched features
+
+**Type:** decision
+**Files:** none — recorded before any code moved
+**Did:** Omkar pasted the session handoff (the previous session's summary), then wrote, verbatim:
+
+> *"Add an option to import as well (working with people), and all similar features *
+>
+> *and what about key changes etc?? We should cover all harmonic posibilities, and I think we can add a feature to add notes as well, bottom of left sidebar is empty, so we can add there *
+>
+> *Do your research, I am giving you broad instructions, I need you to check out all kinds of apps and then add features, use simplicity and ease of use foremost and do things that makes sense"*
+
+**Inference, marked as inference:**
+- "Import … and all similar features" means moving charts between people: a chart file out and in,
+  a share link, and an interchange format other chart apps read (ChordPro). PDF already exists.
+- "Key changes etc" means changes inside a song: a key change (modulation) at any bar, which
+  transposing the song carries along, plus meter and tempo changes, which a chart's "etc" usually
+  means. "All harmonic possibilities" also covers chords off the beat (pushes) and number views
+  (Nashville / Roman), which come for free from storing chords relative to the key.
+- "Add notes … bottom of left sidebar" is **ambiguous**: song notes as text, or musical notes (the
+  "second pass" of decision 2). Asked in the same session; the answer goes in the next decision.
+- The handoff he pasted is his summary of the work so far, not a new instruction.
+
+**Why:** His instruction.
+
+**Open:** What "notes" means (asked). Whether MusicXML export is now wanted: decision 3 picked PDF
+over PDF + MusicXML (asked).
+
+---
+
+## 2026-10-24 — Claude — decision 8: "notes" means musical notes; MusicXML export yes
+
+**Type:** decision
+**Files:** none — recorded before any code moved
+**Did:** These are his answers to the two questions decision 7 left open, as recorded by the
+question tool:
+
+> *"By "add notes" in the left sidebar, which do you mean?"="Musical notes", "Should charts also export to MuseScore format (MusicXML), so other musicians can open them in their notation apps?"="Yes, export only (Recommended)"*
+
+**Inference, marked as inference:**
+- Musical notes are written per bar, *instead of* that bar's slashes: a riff, a hit, a melody line.
+  Chord symbols stay above. A bar is either slashes or notes. This is the lead-sheet convention:
+  slash bars with cue bars of written notes.
+- The left sidebar's empty bottom holds the note palette (durations, rest, dot, tie, accidentals),
+  as he said. The keyboard does the fast path, as MuseScore's does: letters for pitch, digits for
+  duration.
+- MusicXML is export only. It **amends decision 3** ("No MusicXML"), by his answer here.
+
+**Why:** His instruction.
+
+**Open:** None asked.

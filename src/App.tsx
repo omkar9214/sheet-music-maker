@@ -92,7 +92,7 @@ export function App() {
       const before = cellsOf(id);
       const changed = cellTicks !== before.cellTicks || cells.some((c, i) => c.trim() !== before.cells[i]);
       if (changed) {
-        const r = setBarCells(song, id, cells, cellTicks);
+        const r = setBarCells(song, id, cells, cellTicks, song.key);
         if (r.error) return r.error;
         edit(() => r.song);
       }

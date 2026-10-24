@@ -83,6 +83,26 @@ export function accidentalBetween(pc: number, letter: number): number {
   return d > 6 ? d - 12 : d;
 }
 
+/** A key with a signature of at most 7 accidentals; E♯ major (11 sharps) is not one. */
+export function writable(key: Key): boolean {
+  return MAJOR_FIFTHS[spelledText(relativeMajor(key))] !== undefined;
+}
+
+/**
+ * The writable spelling of a key: itself, or its enharmonic (E♯ → F, F♭ → E). Used where a key change
+ * that was written in a playable key lands, after transposing the song, on a theoretical one.
+ */
+export function writableKey(key: Key): Key {
+  if (writable(key)) return key;
+  const pc = pcOf(key.tonic);
+  for (const d of [1, -1]) {
+    const letter = mod(key.tonic.letter + d, 7);
+    const k: Key = { tonic: { letter, acc: accidentalBetween(pc, letter) }, mode: key.mode };
+    if (writable(k)) return k;
+  }
+  return key;
+}
+
 export function fifths(key: Key): number {
   const f = MAJOR_FIFTHS[spelledText(relativeMajor(key))];
   if (f === undefined) throw new Error(`no signature for ${keyName(key)}`);

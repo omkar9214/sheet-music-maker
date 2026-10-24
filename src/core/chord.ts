@@ -218,3 +218,43 @@ export function rekeyChord(c: Chord, from: Key, to: Key): Chord {
   if (c.bass) out.bass = toDegree(fromDegree(c.bass, from), to);
   return out;
 }
+
+/*
+ * Chord display (decision 7, after OnSong's style setting): the same stored degrees shown as letters,
+ * Nashville numbers or Roman numerals. Numbers are counted from the key in force, against the major
+ * scale (a ♭3 in a major key is "♭3"). **Inference**: in a minor key, 1 is the minor tonic, as in
+ * minor-key Nashville charts that use "1m". He has not ruled on that.
+ */
+export type ChordView = "letters" | "numbers" | "roman";
+
+const MAJOR_SEMIS = [0, 2, 4, 5, 7, 9, 11];
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII"];
+
+function degreeLabel(d: Degree, roman: boolean): string {
+  const shift = d.semis - MAJOR_SEMIS[d.steps]!;
+  const acc = shift > 6 ? shift - 12 : shift < -6 ? shift + 12 : shift;
+  const sign = acc === 0 ? "" : (acc > 0 ? "♯" : "♭").repeat(Math.abs(acc));
+  return sign + (roman ? ROMAN[d.steps]! : String(d.steps + 1));
+}
+
+/** Minor-family qualities: lowercase numeral in Roman, and the "m" moves into the case. */
+function minorQuality(q: string): { minor: boolean; rest: string } {
+  if (/^(maj|M|Δ)/.test(q)) return { minor: false, rest: q };
+  const m = /^(min|mi|m|-)(?!aj)/.exec(q);
+  if (m) return { minor: true, rest: q.slice(m[0].length) };
+  if (/^(°|dim|ø)/.test(q)) return { minor: true, rest: q };
+  return { minor: false, rest: q };
+}
+
+export function chordLabel(c: Chord, key: Key, view: ChordView): string {
+  if (view === "letters") return chordText(c, key);
+  const bass = c.bass ? "/" + degreeLabel(c.bass, view === "roman") : "";
+  if (view === "numbers") return degreeLabel(c.root, false) + c.quality + bass;
+  const { minor, rest } = minorQuality(c.quality);
+  const numeral = degreeLabel(c.root, true);
+  return (minor ? numeral.toLowerCase() : numeral) + rest + bass;
+}
+
+export function barChordLabel(bc: BarChord, key: Key, view: ChordView): string {
+  return bc.chord ? chordLabel(bc.chord, key, view) : "N.C.";
+}

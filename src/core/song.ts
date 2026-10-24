@@ -3,7 +3,9 @@
  * is a stack of values and the page is always compiled from one of them.
  */
 import { chordsFromCells, parseBar, rekeyChord, type BarChord } from "./chord";
-import { KEYS, sameKey, type Key } from "./pitch";
+import { DEFAULT_TONIC_OCTAVE, barContexts, keyChangeTo, type KeyChange } from "./context";
+import { restBar, rekeyRuns, writeAt, type NoteRun } from "./notes";
+import { KEYS, mod, sameKey, type Key } from "./pitch";
 import { builtinPatterns, starterPatterns, SLASHES_ID, type Pattern } from "./rhythm";
 import { barTicks, beatTicks, type TimeSig } from "./ticks";
 
@@ -31,6 +33,14 @@ export interface Bar {
   ending?: number[];
   marker?: Marker;
   jump?: Jump;
+  /** A key change from this bar on (decision 7), stored relative to the song's key. */
+  keyChange?: KeyChange;
+  /** A meter change from this bar on. */
+  timeChange?: TimeSig;
+  /** A tempo change from this bar on, ♩ = n. */
+  tempoChange?: number;
+  /** Written notes instead of slashes (decision 8). They sum to the bar. */
+  notes?: NoteRun[];
 }
 
 export interface Section {
@@ -51,6 +61,9 @@ export interface Song {
   /** Built-ins first, then the song's own. */
   patterns: Pattern[];
   sections: Section[];
+  /** The octave of the song's tonic, for written notes. Absent means 4. Transposing moves it to
+   * the nearer tonic, so notes go to the nearer register. */
+  tonicOctave?: number;
 }
 
 let counter = 0;
@@ -229,21 +242,55 @@ export function deleteBar(song: Song, barId: string): Song {
  * chord as written: it is for a key that was set wrong before the chords were typed.
  */
 export function transpose(song: Song, to: Key): Song {
-  return { ...song, key: to };
+  // Transposing keeps the mode: C major to A minor would change what every chord means. The key
+  // menu offers only the song's own mode under Transpose (§7.2).
+  const key: Key = { tonic: to.tonic, mode: song.key.mode };
+  return { ...song, key, tonicOctave: nearerOctave(song, key) };
 }
 
+/**
+ * The octave of the new tonic nearer the old one, by letters: up if the new letter is at most 3
+ * letters above, else down. Letter distance (not semitones) makes there-and-back exact: B→F is down
+ * an augmented 4th, and F→B is up the same, never an octave's drift.
+ */
+function nearerOctave(song: Song, to: Key): number {
+  const oct = song.tonicOctave ?? DEFAULT_TONIC_OCTAVE;
+  const from = oct * 7 + song.key.tonic.letter;
+  const d = mod(to.tonic.letter - song.key.tonic.letter, 7);
+  const step = d <= 3 ? from + d : from - (7 - d);
+  return Math.floor(step / 7);
+}
+
+/**
+ * Set key, keep chords: the chart is re-read in a new key with everything sounding as written.
+ * Chords, key changes and notes keep their pitches; only what they are relative to moves.
+ */
 export function setKeyKeepChords(song: Song, to: Key): Song {
   if (sameKey(song.key, to)) return song;
-  const from = song.key;
-  return {
-    ...song,
-    key: to,
-    sections: song.sections.map((s) => ({
+  const before = barContexts(song);
+  const keyed: Song = { ...song, key: to, tonicOctave: nearerOctave(song, to) };
+  const withChanges: Song = {
+    ...keyed,
+    sections: keyed.sections.map((s) => ({
       ...s,
-      bars: s.bars.map((b) => ({
-        ...b,
-        chords: b.chords.map((c) => ({ ...c, chord: c.chord ? rekeyChord(c.chord, from, to) : null })),
-      })),
+      bars: s.bars.map((b) => (b.keyChange ? { ...b, keyChange: keyChangeTo(keyed, before.get(b.id)!.key) } : b)),
+    })),
+  };
+  const after = barContexts(withChanges);
+  return {
+    ...withChanges,
+    sections: withChanges.sections.map((s) => ({
+      ...s,
+      bars: s.bars.map((b) => {
+        const from = before.get(b.id)!;
+        const toCtx = after.get(b.id)!;
+        const next: Bar = {
+          ...b,
+          chords: b.chords.map((c) => ({ ...c, chord: c.chord ? rekeyChord(c.chord, from.key, toCtx.key) : null })),
+        };
+        if (b.notes) next.notes = rekeyRuns(b.notes, from, toCtx);
+        return next;
+      }),
     })),
   };
 }
@@ -273,25 +320,81 @@ export function deletePattern(song: Song, id: string): Song {
  * Changing the meter keeps every chord where it was, counted in ticks from the bar's start. A chord
  * that would now fall past the bar's end (beat 4 of 4/4 going to 3/4) moves to the new last beat,
  * where it is still seen. Dropping it would lose his work, and keeping it unseen would leave the
- * page lying (non-negotiables 3, 4). **Inference**: he has not ruled on meter changes.
+ * page lying (non-negotiables 3, 4). **Inference**: he has not ruled on meter changes. Written notes
+ * are cut at the new barline, or filled out with rest (non-negotiable 1).
  */
 export function setTime(song: Song, time: TimeSig): Song {
-  const total = barTicks(time);
-  const last = total - beatTicks(time);
+  return fitToMeters({ ...song, time });
+}
+
+/** Every bar made to fit the meter in force there. */
+export function fitToMeters(song: Song): Song {
+  const ctx = barContexts(song);
   return {
     ...song,
-    time,
     sections: song.sections.map((s) => ({
       ...s,
       bars: s.bars.map((b) => {
-        if (b.chords.every((c) => c.tick < total)) return b;
-        const kept = b.chords.filter((c) => c.tick < last);
-        const moved = b.chords.filter((c) => c.tick >= last);
-        const lastChord = moved[moved.length - 1];
-        return { ...b, chords: lastChord ? [...kept, { ...lastChord, tick: last }] : kept };
+        const time = ctx.get(b.id)!.time;
+        const total = barTicks(time);
+        const last = total - beatTicks(time);
+        let out = b;
+        if (!b.chords.every((c) => c.tick < total)) {
+          const kept = b.chords.filter((c) => c.tick < last);
+          const moved = b.chords.filter((c) => c.tick >= last);
+          const lastChord = moved[moved.length - 1];
+          out = { ...out, chords: lastChord ? [...kept, { ...lastChord, tick: last }] : kept };
+        }
+        if (b.notes && b.notes.reduce((a, r) => a + r.ticks, 0) !== total) {
+          let runs: NoteRun[] = restBar(time);
+          let t = 0;
+          for (const r of b.notes) {
+            if (t >= total) break;
+            if (!r.rest) runs = writeAt(runs, time, t, Math.min(r.ticks, total - t), r.pitches).runs;
+            t += r.ticks;
+          }
+          out = { ...out, notes: runs };
+        }
+        return out;
       }),
     })),
   };
+}
+
+/** Key change at a bar: `null` removes it. A change to the key already in force is no change. */
+export function setKeyChange(song: Song, barId: string, to: Key | null): Song {
+  return updateBar(song, barId, { keyChange: to ? keyChangeTo(song, to) : undefined });
+}
+
+export function setTimeChange(song: Song, barId: string, to: TimeSig | null): Song {
+  return fitToMeters(updateBar(song, barId, { timeChange: to ?? undefined }));
+}
+
+/**
+ * A meter for the selected bars only: the change at the first, and the meter before it restored
+ * after the last, unless that bar already has a change of its own. An odd bar of 2/4 in a 4/4 song
+ * is the common case, and it should not take the rest of the song with it. **Inference.**
+ */
+export function setTimeForBars(song: Song, ids: readonly string[], to: TimeSig): Song {
+  const first = ids[0];
+  const last = ids[ids.length - 1];
+  if (!first || !last) return song;
+  const ctx = barContexts(song);
+  const before = ctx.get(first)!.prevTime;
+  const flat = allBars(song);
+  const after = flat[flat.findIndex((x) => x.bar.id === last) + 1]?.bar;
+  let s = updateBar(song, first, { timeChange: to });
+  for (const id of ids.slice(1)) s = updateBar(s, id, { timeChange: undefined });
+  if (after && !after.timeChange && (before.beats !== to.beats || before.unit !== to.unit)) s = updateBar(s, after.id, { timeChange: before });
+  return fitToMeters(s);
+}
+
+export function setTempoChange(song: Song, barId: string, to: number | null): Song {
+  return updateBar(song, barId, { tempoChange: to ?? undefined });
+}
+
+export function setBarNotes(song: Song, barId: string, runs: NoteRun[] | null): Song {
+  return updateBar(song, barId, { notes: runs ?? undefined });
 }
 
 /*
@@ -363,7 +466,7 @@ export function setBarCount(song: Song, sectionId: string, n: number): Song {
 
 /** What ⌘C takes: each bar's chords, rhythm and cues, but not its repeat signs or endings. Those
  * belong to where a bar sits in the form, not to its music. */
-export type BarClip = Pick<Bar, "chords" | "pattern" | "rhythm" | "cueAbove" | "cueBelow">;
+export type BarClip = Pick<Bar, "chords" | "pattern" | "rhythm" | "cueAbove" | "cueBelow" | "notes">;
 
 export function copyBars(song: Song, ids: readonly string[]): BarClip[] {
   return ids.flatMap((id) => {
@@ -375,6 +478,7 @@ export function copyBars(song: Song, ids: readonly string[]): BarClip[] {
     // Chorus came out strummed when only overrides were copied (found driving it).
     const clip: BarClip = { chords: structuredClone(b.chords), pattern: barPatternId(sec, b) };
     if (b.rhythm) clip.rhythm = b.rhythm;
+    if (b.notes) clip.notes = structuredClone(b.notes);
     if (b.cueAbove) clip.cueAbove = b.cueAbove;
     if (b.cueBelow) clip.cueBelow = b.cueBelow;
     return [clip];
@@ -395,6 +499,7 @@ export function pasteBars(song: Song, startId: string, clips: readonly BarClip[]
         // An override only where the destination section would draw something else.
         pattern: clips[k]!.pattern === s.sections[findBar(s, id)!.section]!.pattern ? undefined : clips[k]!.pattern,
         rhythm: clips[k]!.rhythm,
+        notes: clips[k]!.notes ? structuredClone(clips[k]!.notes) : undefined,
         cueAbove: clips[k]!.cueAbove,
         cueBelow: clips[k]!.cueBelow,
       }),
@@ -450,9 +555,11 @@ export function updatePatternText(song: Song, id: string, text: string): Song {
   return { ...song, patterns: song.patterns.map((p) => (p.id === id ? { ...p, text } : p)) };
 }
 
-export function setBarCells(song: Song, barId: string, cells: readonly string[], cellTicks: number): { song: Song; error?: { cell: number; text: string } } {
+/** `key` is the key the chords were typed in: the bar's own, or a part's (Part view, decision 7).
+ * Chords are stored as degrees, so the same degrees are right in the concert key too. */
+export function setBarCells(song: Song, barId: string, cells: readonly string[], cellTicks: number, key: Key): { song: Song; error?: { cell: number; text: string } } {
   const prev = previousBar(song, barId)?.chords ?? [];
-  const p = chordsFromCells(cells, cellTicks, song.key, prev);
+  const p = chordsFromCells(cells, cellTicks, key, prev);
   if (!p.ok) return { song, error: { cell: p.cell, text: p.error } };
   return { song: updateBar(song, barId, { chords: p.chords }) };
 }

@@ -324,3 +324,14 @@ export function stepCounts(ts: TimeSig): string[] {
   const sub = beat === 6 ? ["", "", "&", "", "a", ""] : ["", "e", "&", "a"];
   return Array.from({ length: total }, (_, i) => (i % beat === 0 ? String(i / beat + 1) : sub[i % beat] ?? ""));
 }
+
+/**
+ * One logical run (a note as entered, or a stretch of silence) as written values, in ticks. Written
+ * notes (decision 8) are stored as runs and split for the page here, by the same rules as the step
+ * grid. Runs start and end on 16ths.
+ */
+export function writtenParts(startTicks: number, ticks: number, rest: boolean, ts: TimeSig): number[] {
+  const s = startTicks / STEP_TICKS;
+  const n = ticks / STEP_TICKS;
+  return (rest ? writeRest(s, n, ts) : writeNote(s, n, ts)).map((x) => x * STEP_TICKS);
+}
