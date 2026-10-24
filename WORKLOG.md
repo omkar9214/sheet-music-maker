@@ -943,3 +943,23 @@ That is unchanged, because it belongs to the bar, not to the line.
 **Why:** His instruction.
 
 **Open:** None.
+
+---
+
+## 2026-10-24 — Claude — work: decision 16 deployed after a stuck run
+
+**Type:** work
+**Files:** none (deploy only)
+**Did:** Omkar reported "not live". Pages run 40112891873 hung `in_progress` from 16:43:41 UTC; GitHub
+status said all systems were operational, and the API returned a 502 on its jobs. Cancelled it and
+started 40113247242 with `workflow_dispatch` on the same commit, `52cc5c6`. Omkar also stopped a
+10-second polling loop and asked what polling is: check once, and let him reload.
+
+**Verified:**
+
+```
+gh run view 40113247242 → completed success (build 17s, deploy 9s)
+curl https://omkar9214.github.io/sheet-music-maker/ → assets/index-CGNYBCA6.js, the same as a local build
+```
+
+**Open:** This entry is committed locally only, because pushing it would redeploy for no change.
