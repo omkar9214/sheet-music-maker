@@ -4,7 +4,7 @@
  * hid sections behind a selected bar. Clicking a section selects all its bars, so the inspector's
  * rhythm then applies to the whole section.
  */
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Section, Song } from "../core/song";
 
 export const SECTION_NAMES = ["Intro", "Verse", "Pre-Chorus", "Chorus", "Bridge", "Solo", "Interlude", "Outro"];
@@ -49,7 +49,7 @@ function Name({ section, onRename }: { section: Section; onRename: (n: string) =
   );
 }
 
-export function FormPanel({ song, active, a }: { song: Song; active: string | null; a: FormActions }) {
+export function FormPanel({ song, active, a, bottom }: { song: Song; active: string | null; a: FormActions; bottom?: ReactNode }) {
   let bar = 1;
   return (
     <nav className="form-panel">
@@ -82,6 +82,7 @@ export function FormPanel({ song, active, a }: { song: Song; active: string | nu
           <button key={n} className="chip" onClick={() => a.add(n)}>+ {n}</button>
         ))}
       </div>
+      {bottom}
     </nav>
   );
 }

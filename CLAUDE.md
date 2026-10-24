@@ -13,9 +13,11 @@ cannot drift apart. **Read it in full before anything.**
 
 | Path | What it is |
 |---|---|
-| `src/core/**` | Musical truth: spelled keys (`pitch`), key-relative chords and transposition (`chord`), slash-rhythm patterns (`rhythm`), the chart and its edits (`song`), his reference chart (`khwabon`). May never import from `ui/` (the gate checks). |
+| `src/core/**` | Musical truth: spelled keys (`pitch`), key-relative chords, transposition and number views (`chord`), what is in force per bar: key/meter/tempo changes (`context`), written notes (`notes`), parts and capo (`part`), slash-rhythm patterns (`rhythm`), the chart and its edits (`song`), his reference chart (`khwabon`). May never import from `ui/` (the gate checks). |
+| `src/core/exchange/**` | Chart file + share link (`file`), ChordPro in/out (`chordpro`), MusicXML out (`musicxml`). Round-trip tested. |
 | `src/ui/engrave/**` | Song → pages (`layout`, pure, tested) and SVG (`Notation`). Geometry measured off his PDF (`metrics`). |
-| `src/ui/**` | The editor (redesigned, decision 5): the page with bar selection and inline chord entry (`Sheet`), suggestions (`suggest`, tested), the Form panel, the inspector, the top bar, save/undo (`store`). |
+| `src/ui/**` | The editor: the page with bar selection, beat cells and the note cursor (`Sheet`), suggestions (`suggest`), the Form panel with the note palette (`FormPanel`, `NotesPanel`), the inspector, the top bar, rhythm grid, sharing (`sharing`), save/undo (`store`). |
+| `docs/research/` | What other chart apps do, and what was taken (decision 7). |
 | `src/App.tsx` | Wires the store, the layout and the editor. |
 | `docs/reference/` | His MuseScore PDF — the definition of "looks like a traditional chart". |
 | `skills/verify-repo/` | The gate's first step. Rules in `rules.mjs`, proven in `rules.test.mjs`. |

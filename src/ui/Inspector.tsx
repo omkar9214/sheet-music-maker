@@ -6,6 +6,10 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { Bar, Jump, Marker, Song } from "../core/song";
+import type { BarContext } from "../core/context";
+import { keyName, sameKey, type Key } from "../core/pitch";
+import { TIME_SIGS, type TimeSig } from "../core/ticks";
+import { KeyGrid, Popover } from "./TopBar";
 import { STEP_TICKS, stepCounts, type Step } from "../core/rhythm";
 import { barPatternId, findBar } from "../core/song";
 import { beatTicks } from "../core/ticks";
@@ -35,6 +39,9 @@ export interface InspectorActions {
   setJump: (j: Jump | undefined) => void;
   insertBar: (before: boolean) => void;
   deleteBars: () => void;
+  setKeyChange: (k: Key | null) => void;
+  setTime: (t: TimeSig | null) => void;
+  setTempo: (n: number | null) => void;
 }
 
 function Chip(props: { on?: boolean; onClick: () => void; children: React.ReactNode; title?: string }) {
@@ -111,12 +118,74 @@ function SavePattern({ onSave, count }: { onSave: (name: string) => void; count:
   );
 }
 
+/**
+ * Key, meter and tempo at the selection (decision 7). A key change and a tempo change hold from
+ * their bar on, as on the page. A meter is set for the selected bars only, and the bar after them
+ * goes back (`setTimeForBars`), because an odd bar of 2/4 is the common case.
+ */
+function HarmonyRows({ bar, ctx, a }: { bar: Bar; ctx: BarContext; a: InspectorActions }) {
+  const [tempo, setTempo] = useState("");
+  useEffect(() => setTempo(bar.tempoChange !== undefined ? String(bar.tempoChange) : ""), [bar.id, bar.tempoChange]);
+  const commitTempo = () => {
+    const n = Number(tempo);
+    if (tempo === "") a.setTempo(null);
+    else if (n >= 20 && n <= 400) a.setTempo(n);
+    else setTempo(bar.tempoChange !== undefined ? String(bar.tempoChange) : "");
+  };
+  return (
+    <>
+      <div className="row">
+        <span className="lbl">Key</span>
+        <div className="chips">
+          <Popover label={bar.keyChange ? <>→ <b>{keyName(ctx.key)}</b></> : <span className="muted">{keyName(ctx.key)}</span>} className="inline-pop">
+            {(close) => (
+              <div className="key-panel">
+                <KeyGrid current={bar.keyChange ? ctx.key : null} onPick={(k) => { a.setKeyChange(sameKey(k, ctx.prevKey) ? null : k); close(); }} />
+                {bar.keyChange && <button className="chip" onClick={() => { a.setKeyChange(null); close(); }}>No change</button>}
+              </div>
+            )}
+          </Popover>
+        </div>
+      </div>
+      <div className="row">
+        <span className="lbl">Time</span>
+        <div className="chips">
+          {TIME_SIGS.map((t) => (
+            <Chip key={`${t.beats}/${t.unit}`} on={ctx.time.beats === t.beats && ctx.time.unit === t.unit} onClick={() => a.setTime(t)}>
+              {t.beats}/{t.unit}
+            </Chip>
+          ))}
+          {bar.timeChange && <Chip onClick={() => a.setTime(null)} title="Remove the meter change">×</Chip>}
+        </div>
+      </div>
+      <div className="row">
+        <span className="lbl">Tempo</span>
+        <div className="chips">
+          <label className="tempo-field">
+            ♩ =
+            <input
+              value={tempo}
+              placeholder={String(ctx.tempo)}
+              inputMode="numeric"
+              onChange={(e) => setTempo(e.target.value.replace(/\D/g, "").slice(0, 3))}
+              onBlur={commitTempo}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+            />
+          </label>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function Inspector(props: {
   song: Song;
   ids: readonly string[];
   chordsText: string;
   /** The focus bar's rhythm as steps. */
   steps: Step[] | null;
+  /** What is in force at the first selected bar. */
+  ctx: BarContext;
   focusCue: { which: "above" | "below"; n: number } | null;
   onCueFocused: () => void;
   a: InspectorActions;
@@ -171,7 +240,7 @@ export function Inspector(props: {
           </div>
         </div>
         {props.steps && (
-          <RhythmGrid steps={props.steps} counts={stepCounts(song.time)} beatSteps={beatTicks(song.time) / STEP_TICKS} onChange={a.setSteps} />
+          <RhythmGrid steps={props.steps} counts={stepCounts(props.ctx.time)} beatSteps={beatTicks(props.ctx.time) / STEP_TICKS} onChange={a.setSteps} />
         )}
         {sameOwn && <SavePattern onSave={(name) => a.saveRhythm(name, sameOwn)} count={song.patterns.length} />}
       </div>
@@ -198,6 +267,8 @@ export function Inspector(props: {
           )}
         </div>
       </div>
+
+      <HarmonyRows bar={first.bar} ctx={props.ctx} a={a} />
 
       <div className="row">
         <span className="lbl">Ending</span>

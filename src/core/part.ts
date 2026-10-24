@@ -4,7 +4,7 @@
  * the standard ones: B♭ instruments read a major 2nd above concert, E♭ a major 6th, F a perfect 5th.
  * A capo on fret n shows shapes n semitones below the sounding key, as OnSong's capo does.
  */
-import { KEYS, fifths, mod, pcOf, sameKey, type Key } from "./pitch";
+import { KEYS, accidentalBetween, fifths, mod, pcOf, sameKey, type Key } from "./pitch";
 import { DEFAULT_TONIC_OCTAVE } from "./context";
 import { transpose, type Song } from "./song";
 
@@ -55,4 +55,14 @@ export function partSong(song: Song, part: Part): Song {
   const oct = song.tonicOctave ?? DEFAULT_TONIC_OCTAVE;
   const step = oct * 7 + song.key.tonic.letter + iv.letters;
   return { ...song, key: { tonic: key.tonic, mode: song.key.mode }, tonicOctave: Math.floor((step - mod(key.tonic.letter - (song.key.tonic.letter + iv.letters), 7)) / 7) };
+}
+
+/** A key picked while looking at a part (a key change typed in the B♭ view) as the concert key it
+ * stands for: the part's interval taken back off, by letter and semitone. */
+export function concertKey(picked: Key, concert: Key, part: Part): Key {
+  const shown = partKey(concert, part);
+  const dl = mod(shown.tonic.letter - concert.tonic.letter, 7);
+  const ds = mod(pcOf(shown.tonic) - pcOf(concert.tonic), 12);
+  const letter = mod(picked.tonic.letter - dl, 7);
+  return { tonic: { letter, acc: accidentalBetween(mod(pcOf(picked.tonic) - ds, 12), letter) }, mode: picked.mode };
 }

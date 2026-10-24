@@ -8,6 +8,7 @@
  * chord entry in the bar, and Enter/Tab carries it to the next bar, as Dorico's chord popover does.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import type { Key } from "../core/pitch";
 import type { Song } from "../core/song";
 import type { BarLayout, PageLayout, SystemLayout } from "./engrave/layout";
 import {
@@ -40,6 +41,8 @@ interface Props {
   focus: string | null;
   entry: Entry | null;
   editingMeta: "title" | "source" | null;
+  /** Note input's cursor (decision 8): drawn as a bar at the tick where the next note goes. */
+  noteCursor: { barId: string; tick: number } | null;
   onPress: (barId: string, extend: boolean) => void;
   onOpen: (barId: string, zone: Zone) => void;
   cellsOf: (barId: string) => { cells: string[]; cellTicks: number };
@@ -80,6 +83,8 @@ function locate(pages: PageLayout[], id: string) {
  */
 function ChordCells(props: {
   song: Song;
+  /** The key in force at the bar: suggestions are spelled in it. */
+  chordKey: Key;
   initial: { cells: string[]; cellTicks: number };
   seed?: string;
   beatTicks: number;
@@ -91,7 +96,23 @@ function ChordCells(props: {
   const [cells, setCells] = useState<string[]>(() =>
     props.seed !== undefined ? props.initial.cells.map((_, i) => (i === 0 ? props.seed! : "")) : props.initial.cells,
   );
-  const cellTicks = props.initial.cellTicks;
+  const [cellTicks, setCellTicks] = useState(props.initial.cellTicks);
+  // ½ splits every beat in two, for a chord on the "and" (a push, decision 7). Back to whole beats
+  // only while nothing sits on an "and".
+  const halved = cellTicks < props.beatTicks;
+  const canWhole = halved && cells.every((c, i) => i % 2 === 0 || c.trim() === "");
+  const toggleHalf = () => {
+    if (!halved) {
+      setCells((c) => c.flatMap((x) => [x, ""]));
+      setCellTicks(props.beatTicks / 2);
+      setActive((a) => a * 2);
+    } else if (canWhole) {
+      setCells((c) => c.filter((_, i) => i % 2 === 0));
+      setCellTicks(props.beatTicks);
+      setActive((a) => Math.floor(a / 2));
+    }
+    refs.current[active]?.focus();
+  };
   const [active, setActive] = useState(0);
   const [err, setErr] = useState<{ cell: number; text: string } | null>(null);
   const [hi, setHi] = useState(-1);
@@ -104,7 +125,7 @@ function ChordCells(props: {
   const [caretEnd, setCaretEnd] = useState(props.seed !== undefined);
   const value = cells[active] ?? "";
   // A suggestion that only repeats what is typed is noise.
-  const list = suggest(props.song, value.trim(), 6).filter((t) => t !== value.trim());
+  const list = suggest(props.song, value.trim(), 6, props.chordKey).filter((t) => t !== value.trim());
 
   useLayoutEffect(() => {
     alive.current = true;
@@ -197,8 +218,17 @@ function ChordCells(props: {
       }}
     >
       <div className="cells-row">
+        <button
+          className={halved ? "half on" : "half"}
+          title={halved ? "Whole beats" : "Split beats for pushes"}
+          disabled={halved && !canWhole}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={toggleHalf}
+        >
+          ½
+        </button>
         {cells.map((c, i) => (
-          <label key={i} className={`cell${i === active ? " on" : ""}${err?.cell === i ? " invalid" : ""}`}>
+          <label key={i} className={`cell${i === active ? " on" : ""}${err?.cell === i ? " invalid" : ""}${halved ? " narrow" : ""}`}>
             <span className="cell-beat">{label(i)}</span>
             <input
               ref={(el) => {
@@ -220,7 +250,7 @@ function ChordCells(props: {
         <div className="entry-error">{err.text}</div>
       ) : (
         list.length > 0 && (
-          <ul className="suggest" style={{ marginLeft: active * 70 }} onMouseDown={(e) => e.preventDefault()}>
+          <ul className="suggest" style={{ marginLeft: 30 + active * (halved ? 50 : 70) }} onMouseDown={(e) => e.preventDefault()}>
             {list.map((t, i) => (
               // mousemove, not mouseenter: the list opens under a resting pointer, and mouseenter
               // then stole the highlight (decision 5's walk).
@@ -306,6 +336,20 @@ export function Sheet(props: Props) {
               )}
             </g>
             <Notation page={p} title={song.title} source={song.source} />
+            {props.noteCursor &&
+              p.systems.flatMap((s) =>
+                s.bars
+                  .filter((b) => b.bar.id === props.noteCursor!.barId)
+                  .map((b) => {
+                    const x = b.xAt(props.noteCursor!.tick) - 0.4;
+                    return (
+                      <g key="cursor" className="edit-layer note-cursor">
+                        <rect x={b.x} y={s.y - 6} width={b.w} height={STAFF_H + 12} className="note-bar" />
+                        <rect x={x} y={s.y - 5} width={1.6} height={STAFF_H + 10} className="note-caret" />
+                      </g>
+                    );
+                  }),
+              )}
             <g className="edit-layer">
               {p.index === 0 && (
                 <>
@@ -343,9 +387,10 @@ export function Sheet(props: Props) {
             <ChordCells
               key={entry.barId}
               song={song}
+              chordKey={at.b.ctx.key}
               initial={props.cellsOf(entry.barId)}
               {...(entry.seed !== undefined ? { seed: entry.seed } : {})}
-              beatTicks={beatTicks(song.time)}
+              beatTicks={beatTicks(at.b.ctx.time)}
               left={Math.min(at.b.x * SCALE, PAGE_W * SCALE - 300)}
               top={(barColumn(at.s, at.b).y + barColumn(at.s, at.b).h) * SCALE + 2}
               onCommit={(c, t, move) => props.onCommitCells(entry.barId, c, t, move)}

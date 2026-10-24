@@ -7,8 +7,9 @@ Branch: `main`, no remote. §0 is written (decisions 2–3). The editor was rede
 
 ## Now
 
-1. **Omkar tries beat cells and the rhythm grid** (decision 6). Everything below waits on what he
-   says. **Note:** on 2026-10-23 his chart "Bang Bang" was found on **5194**, the agents' port. It
+1. **Omkar tries decisions 7–8**: Charts ▾ → Copy link / Import / Chart file / ChordPro / MusicXML;
+   a key, meter or tempo change from the inspector; A / 1 / I and Part in the top bar; Notes at the
+   bottom left. Everything below waits on what he says. **Note:** on 2026-10-23 his chart "Bang Bang" was found on **5194**, the agents' port. It
    was backed up before testing and restored after. His port is 5193, and agents must never clear
    5194's storage without checking it first.
 
@@ -25,15 +26,20 @@ Branch: `main`, no remote. §0 is written (decisions 2–3). The editor was rede
 5. **There is no visible keyboard help.** The keys are listed in `App.tsx`'s header comment only.
    If he doesn't discover typing-to-enter, a one-line hint in the empty inspector may be warranted.
    §7.1 says labels only, so ask first.
-6. **Chords between beats** (a push on the "and" of 4) cannot be typed into beat cells. A bar that
-   already has one opens with 8th cells. If he needs pushes, add a way to halve the cells.
-7. **Print was checked by applying the print stylesheet on screen** (3 pages at 816×1056 px, the
+6. **Written notes, not yet done:**
+   - no click-to-place (keyboard and palette only)
+   - no triplets
+   - one voice
+   - stems of beamed groups are not angled
+   - a tie into the next bar is drawn to the barline only
+   - accidental stacking in dense chords is basic
+7. **MusicXML was not opened in MuseScore.** It is checked for well-formedness and content by tests
+   only. First real check: import it into MuseScore 4 and look.
+8. **Print was checked by applying the print stylesheet on screen** (3 pages at 816×1056 px, the
    UI hidden), not through a real print dialog or a saved PDF. First real print: check the page
    breaks and margins.
-8. **No export/import file.** Charts live in this browser only. A JSON download/upload is cheap, but
-   it would need a round-trip test (non-negotiable 5).
-9. **Note entry: the "second pass" he mentioned.** It is not MVP. When it comes, revisit the no-library
-   decision (AGENTS.md §6).
+9. **Nothing syncs between devices.** Share links and files do the moving.
+10. **Pushes** are ½ in the chord boxes. Check that he finds them.
 
 ## Open with him
 

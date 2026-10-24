@@ -15,66 +15,67 @@ who receives a chart and may only have a phone. **The horn player**, who reads a
 
 ### Sharing
 - **Bandleader · sends a chart** → Charts ▾ → "Copy link". The chart rides in the link itself,
-  with no account and no server. [build now]
+  with no account and no server. [built]
 - **Bandmate · opens the link** → the app opens on a copy of that chart, added to their list.
   Opening the same link twice gives two copies, never an overwrite of a chart they edited.
-  [build now]
+  [built]
 - **· a damaged link** → the app opens as normal and says "Couldn't read that link". Nothing is
-  lost. [build now]
+  lost. [built]
 - **Any · backup / another computer** → "Export file" writes `Title.chart.json`. "Import" or
   dropping the file on the window adds it. Exporting and importing back gives an identical chart
-  (non-negotiable 5). [build now, tested]
+  (non-negotiable 5). [built, tested]
 - **· a file from another app** → ChordPro (`.cho`, `.chopro`, `.chordpro`, `.txt`) imports grids
-  bar for bar. Lyric-style ChordPro imports one bar per chord. [build now]
+  bar for bar. Lyric-style ChordPro imports one bar per chord. [built]
 - **· someone uses OnSong / SongbookPro** → "Export ChordPro". Chords, sections, repeats and
   endings are kept. Cues become comments. Rhythms and notes are not carried, and that is said in
-  the file's header comment. [build now]
+  the file's header comment. [built]
 - **· someone uses MuseScore / Sibelius / Dorico** → "Export MusicXML": chords, slash rhythm, notes,
-  repeats, endings, key, meter and tempo changes, and cues as text. [build now]
+  repeats, endings, key, meter and tempo changes, and cues as text. [built]
 - **· wrong file** (an image, a corrupt JSON) → "Couldn't import <name>". The library is unchanged.
-  [build now]
+  [built]
 
 ### Harmony
 - **Arranger · last chorus up a step** → select its first bar → Key change → pick D (from C). A
   double bar and the new signature are drawn, and everything after reads in D until the next
-  change. [build now]
+  change. [built]
 - **· transposes the song with a key change in it** → the change keeps its interval: C→D up a
-  step becomes A→B. [build now, tested]
+  step becomes A→B. [built, tested]
 - **· key change to a key with too many accidentals after transposing** (C♯ up a major 3rd is E♯)
   → it is written as F, the enharmonic key with at most 7 accidentals, and its chords are spelled
-  in F. [build now, tested]
+  in F. [built, tested]
 - **· changes back to the home key** → key change to the home key, and the cancelling naturals
-  are drawn when the new key has fewer accidentals. [build now]
-- **· a 2/4 bar in a 4/4 song** → Time change on that bar. The meter is drawn there, and the bar
-  after it changes back if he sets it. Patterns that don't fit draw beats. [build now]
-- **· tempo change** → Tempo on that bar, drawn as ♩ = n above. [build now]
-- **· a push on the "and" of 4** → ½ in the chord boxes splits each beat into two. [build now]
+  are drawn when the new key has fewer accidentals. [built]
+- **· a 2/4 bar in a 4/4 song** → select it, then Time 2/4. The meter applies to the selected bars
+  only, and the bar after goes back by itself (`setTimeForBars`). A whole 3/4 bridge is selected and
+  set the same way. Patterns that don't fit draw beats. [built, tested]
+- **· tempo change** → Tempo on that bar, drawn as ♩ = n above. [built]
+- **· a push on the "and" of 4** → ½ in the chord boxes splits each beat into two. [built]
 - **Session player · wants numbers** → Chords: A / 1 / I in the top bar. The chart shows Nashville
-  numbers or Roman numerals from the same data, and prints that way. [build now]
+  numbers or Roman numerals from the same data, and prints that way. [built]
 - **Horn player · needs a B♭ part** → Part: B♭. The whole chart, chords and notes alike, is shown
   and printed up a major 2nd. Editing is still possible, and what is typed is read in the part's
-  key. [build now]
-- **Guitarist · capo 2** → Part: Capo 2. The shapes are shown down 2 semitones. [build now]
+  key. [built]
+- **Guitarist · capo 2** → Part: Capo 2. The shapes are shown down 2 semitones. [built]
 
 ### Written notes (decision 8)
 - **Arranger · writes a riff in bar 9** → select bar 9 → Notes (left sidebar, bottom) → the bar
   becomes a whole rest with a cursor. Press a digit for the length (1 whole, 2 half, 3 quarter, 4
-  8th, 5 16th), then a letter A–G. The note lands at the cursor, which moves on. [build now]
+  8th, 5 16th), then a letter A–G. The note lands at the cursor, which moves on. [built]
 - **· which octave?** → the nearest to the previous note. The first note of a bar goes nearest the
-  middle of the staff. ⌘↑/⌘↓ moves an octave. [build now]
+  middle of the staff. ⌘↑/⌘↓ moves an octave. [built]
 - **· sharps and flats** → a typed letter takes the key signature's accidental (C in B major is C♯).
   ↑/↓ moves a semitone, and ♯ ♭ ♮ on the palette set one. Accidentals carry through the bar, as
-  in print. [build now]
-- **· a chord of notes** → Shift+letter adds a note above to the same chord. [build now]
+  in print. [built]
+- **· a chord of notes** → Shift+letter adds a note above to the same chord. [built]
 - **· rest / dot / tie** → 0 (or the rest button) for a rest, `.` for a dot, `T` to tie to the
-  next note. [build now]
-- **· mistake** → ⌫ turns the last note back into rest. ⌘Z undoes. [build now]
+  next note. [built]
+- **· mistake** → ⌫ turns the last note back into rest. ⌘Z undoes. [built]
 - **· runs past the bar** → the note is cut at the barline. The cursor then moves to the next bar,
-  which becomes a notes bar when its first note goes in. [build now]
+  which becomes a notes bar when its first note goes in. [built]
 - **· back to slashes** → Slashes on the palette. The notes are dropped, and ⌘Z brings them back.
-  [build now]
+  [built]
 - **· transposes / part view** → notes move with the key, by the nearest octave, and are spelled
-  in the new key. [build now, tested]
+  in the new key. [built, tested]
 
 ## Chords on beats, rhythm by clicking — decision 6 (2026-10-23)
 
@@ -290,6 +291,22 @@ open and advances), and spreadsheets (click selects, typing replaces, Enter edit
   below legibility. [built]
 
 ## What walking it found
+
+Decisions 7–8:
+
+- **A meter change ran to the end of the song.** Setting bar 4 to 2/4 left the whole chart in 2/4.
+  A meter now applies to the selection, and the next bar goes back. Test: the exchange fixture uses
+  `setTimeForBars`, and ChordPro carries the `{time: 4/4}` back.
+- **An unlabeled ChordPro grid became "Section 2".** The exporter splits a section at a key or meter
+  change, and the importer now continues the section. Test: his chart round-trips its section names.
+- **`{title: X}` lost its value** to a lazy regex. Rewritten. Test: the title round-trips.
+- **The key-change picker was clipped** by the inspector's scroll box. It now opens in place, sized
+  to the panel (measured: right edge 1453 ≤ 1482).
+- **A tie into the next bar was neither drawn nor exported.** It is now drawn to the barline, and
+  MusicXML stops it on the next bar's first note. Test proven by toggling: 1 failed without, 9 passed
+  with.
+- **A test passed for the wrong reason**: the "unwritable key" case stored F directly. Rewritten to
+  build D♯ (→ E♭) and E♯ (→ F) for real.
 
 Decision 6:
 

@@ -39,12 +39,14 @@ export function replaceToken(value: string, token: string): string {
  * Matching is a prefix of the spelled text, so `c#m1` does not match C♯min11. That is deliberate:
  * prefixes are predictable, and a typed quality means what it says.
  */
-export function suggest(song: Song, token: string, limit = 8): string[] {
+export function suggest(song: Song, token: string, limit = 8, key = song.key): string[] {
   const out: string[] = [];
   const add = (t: string) => {
     if (!out.includes(t)) out.push(t);
   };
-  const pool = [...songChords(song), ...diatonicChords(song.key)].map((c) => chordText(c, song.key));
+  // Chords are degrees, so in a bar after a key change the song's chords are offered in that key: its
+  // "same chords", which is what a modulated chorus uses.
+  const pool = [...songChords(song), ...diatonicChords(key)].map((c) => chordText(c, key));
   if (token === "") {
     pool.forEach(add);
     return out.slice(0, limit);
@@ -56,7 +58,7 @@ export function suggest(song: Song, token: string, limit = 8): string[] {
   pool.filter((t) => t.startsWith(typed) && /^[A-G][♯♭𝄪𝄫]*/.exec(t)?.[0] === rootText).forEach(add);
   for (const q of COMMON) {
     const t = rootText + q;
-    if (t.startsWith(typed) && parseChord(t, song.key)) add(t);
+    if (t.startsWith(typed) && parseChord(t, key)) add(t);
   }
   return out.slice(0, limit);
 }

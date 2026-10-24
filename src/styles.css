@@ -108,7 +108,7 @@ button { font: inherit; color: inherit; }
 /* Form panel: the song map. */
 .form-panel {
   width: 220px; flex: none; overflow: auto; background: var(--panel); border-right: 1px solid var(--line);
-  padding: 14px 10px; display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 10px; display: flex; flex-direction: column; gap: 8px; min-height: 0;
 }
 .form-panel h3 { margin: 0 4px 2px; font-size: 14px; font-weight: 600; }
 .form-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -187,10 +187,56 @@ button { font: inherit; color: inherit; }
   background: #fff; outline: none;
 }
 
+
+/* Decision 7: sharing, views, parts, harmony rows. */
+.share-label { font-size: 12px; width: 36px; }
+.view-seg { height: 30px; }
+.view-seg button { min-width: 30px; font-family: Edwin, serif; font-size: 15px; padding: 0 9px; }
+.part-chips { width: 260px; }
+.tempo-field { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; background: #fff; }
+.tempo-field input { width: 40px; border: 0; font: inherit; outline: none; background: transparent; }
+.inline-pop .tb { height: 26px; padding: 0 9px; }
+/* Inside the inspector a floating panel would be clipped by its scroll box (found driving it), so the
+   key picker opens in place, under its row. */
+.inline-pop { width: 100%; }
+.inline-pop .pop-panel { position: static; margin-top: 6px; padding: 6px; box-shadow: none; min-width: 0; }
+.inline-pop .key-panel { width: auto; }
+.inline-pop .key-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
+.inline-pop .key-grid .chip { padding: 0; height: 24px; font-size: 12px; justify-content: center; min-width: 0; }
+.part-badge {
+  position: sticky; top: 0; z-index: 4; width: max-content; margin: 0 auto 10px; padding: 3px 10px;
+  border-radius: 12px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 600;
+}
+.toast {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 50; padding: 8px 14px;
+  border-radius: 8px; background: var(--ink); color: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); max-width: 70vw;
+}
+.toast.bad { background: var(--danger); }
+.half { width: 26px; align-self: flex-end; height: 28px; border: 1px solid var(--line); border-radius: 4px; background: #fff; cursor: pointer; font-size: 13px; }
+.half.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.half:disabled { opacity: 0.35; cursor: default; }
+.cell.narrow { width: 44px; }
+
+/* Decision 8: the note palette, bottom of the left sidebar, and the note cursor on the page. */
+.notes-panel { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.notes-panel h3 { margin: 0 4px; font-size: 14px; font-weight: 600; }
+.notes-panel .seg { align-self: stretch; display: grid; grid-template-columns: 1fr 1fr; }
+.note-values, .note-tools { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
+.note-tools { grid-template-columns: repeat(4, 1fr); }
+.nv { height: 32px; border: 1px solid var(--line); border-radius: 5px; background: #fff; cursor: pointer; font-size: 15px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.nv span { font-size: 22px; line-height: 1; transform: translateY(5px); }
+.nv .dot { font-size: 14px; transform: none; }
+.nv.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.nv:hover:not(.on) { border-color: #b9b2a6; }
+.chip.done { align-self: flex-start; }
+.note-cursor { pointer-events: none; }
+.note-cursor .note-bar { fill: rgba(47, 95, 208, 0.06); }
+.note-cursor .note-caret { fill: var(--accent); }
+
 @page { size: letter; margin: 0; }
 @media print {
   html, body, #root, .app, .workspace, .scroller { height: auto; overflow: visible; background: #fff; }
-  .topbar, .inspector, .form-panel, .edit-layer, .cells, .meta-input { display: none !important; }
+  .topbar, .inspector, .form-panel, .edit-layer, .cells, .meta-input, .part-badge, .toast { display: none !important; }
   .scroller { padding: 0; }
   .sheet { gap: 0; width: auto; }
   .page { box-shadow: none; width: 8.5in !important; height: 11in !important; break-after: page; overflow: hidden; }

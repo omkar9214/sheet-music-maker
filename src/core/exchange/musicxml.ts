@@ -163,6 +163,8 @@ export function toMusicXML(song: Song): string {
     '<part-list><score-part id="P1"><part-name>Chart</part-name></score-part></part-list>',
     '<part id="P1">',
   ];
+  // A note tied over the barline: its tie stop belongs on the next bar's first note.
+  let carryTie = false;
   flat.forEach(({ bar, section, number }, idx) => {
     const c = ctx.get(bar.id)!;
     const prev = flat[idx - 1]?.bar;
@@ -204,8 +206,11 @@ export function toMusicXML(song: Song): string {
         const ch = chords.shift()!;
         m.push(harmony(ch, c, Math.max(0, ch.tick - e.start)));
       }
-      m.push(note(e, i, bm, i > 0 && evs[i - 1]!.tie && !evs[i - 1]!.rest));
+      const tiedIn = i > 0 ? evs[i - 1]!.tie && !evs[i - 1]!.rest : carryTie && !e.rest;
+      m.push(note(e, i, bm, tiedIn));
     });
+    const lastEv = evs[evs.length - 1];
+    carryTie = !!lastEv && lastEv.tie && !lastEv.rest && !lastEv.slash;
     if (bar.jump) m.push(words(JUMPS[bar.jump]!, "above", false));
 
     // Right barline: repeat end, ending stop, final, or a double bar before a key change.

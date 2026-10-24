@@ -3,7 +3,9 @@
  * It decides where things go, never what they are (non-negotiable 3). The chords, rhythms and cues
  * all come from `core`.
  */
-import { barChordText } from "../../core/chord";
+import { barChordLabel, type ChordView } from "../../core/chord";
+import { barContexts, type BarContext } from "../../core/context";
+import { shownAccidentals, stepOf, writtenEvents, writtenOf } from "../../core/notes";
 import { fifths } from "../../core/pitch";
 import { barRhythm, beamGroups, onsets, type RhythmEvent } from "../../core/rhythm";
 import { allBars, barPatternId, patternById, type Bar, type Clef, type Jump, type Marker, type Song } from "../../core/song";
@@ -34,7 +36,7 @@ export interface ChordLayout {
 
 /** Something in a row above or below the staff. Rows count outward from the staff. */
 export interface RowItem {
-  kind: "cue" | "marker" | "jump" | "count";
+  kind: "cue" | "marker" | "jump" | "count" | "tempo";
   barId: string;
   x: number;
   w: number;
@@ -59,6 +61,20 @@ export interface BarLayout {
   endingStart: boolean;
   endingClosed: boolean;
   final: boolean;
+  /** The next bar changes key: this one ends on a double bar. */
+  doubleBar: boolean;
+  /** Written notes (decision 8), one entry per event: staff positions (half-spaces up from the
+   * bottom line) and the accidental to print, or null. */
+  notes?: NoteHeads[];
+  /** A key or meter change drawn inside the system at this bar (decision 7). */
+  inline?: { key?: { cancel: number; fifths: number; prevFifths: number }; time?: TimeSig; x: number };
+  /** Where a tick falls in this bar, for the note cursor. */
+  xAt: (tick: number) => number;
+  ctx: BarContext;
+}
+
+export interface NoteHeads {
+  pitches: Array<{ pos: number; acc: number | null }>;
 }
 
 export interface SystemLayout {
@@ -70,6 +86,8 @@ export interface SystemLayout {
   x1: number;
   clef: Clef;
   fifths: number;
+  /** Cancelling naturals before the signature, when a key change lands on the system's first bar. */
+  cancel: { count: number; prevFifths: number } | undefined;
   time?: TimeSig;
   headerW: number;
   label?: string;
@@ -109,6 +127,24 @@ export function headerWidth(clef: Clef, fifthsCount: number, time?: TimeSig): nu
   return clefW + keyW + timeW;
 }
 
+function keyWidth(fifthsCount: number, cancel: number): number {
+  const n = Math.abs(fifthsCount) + cancel;
+  return n ? n * 1.05 * SP + 0.8 * SP : 0;
+}
+const TIME_W = 1.9 * SP + 0.9 * SP;
+
+/** Cancelling naturals at a key change: the old signature's, when the new one has none or turns
+ * from sharps to flats or back. **Inference**: Gould leaves cancellation largely to taste, and this
+ * is the sparing modern practice. */
+export function cancels(prev: number, next: number): number {
+  return next === 0 || Math.sign(prev) !== Math.sign(next) ? Math.abs(prev) : 0;
+}
+
+/** The staff's bottom line as a diatonic step: E4 in treble, G2 in bass. */
+export function bottomStep(clef: Clef): number {
+  return clef === "bass" ? 2 * 7 + 4 : 4 * 7 + 2;
+}
+
 /** Where a tick sits along the bar's content, linear between the onsets either side of it. */
 function offsetAt(tick: number, starts: number[], offs: number[], total: number, width: number): number {
   for (let i = 0; i < starts.length; i++) {
@@ -127,34 +163,72 @@ interface Prepared {
   number: number;
   sectionId: string;
   sectionIndex: number;
+  ctx: BarContext;
   events: RhythmEvent[];
   stemless: boolean;
   fellBack: boolean;
+  notes?: NoteHeads[];
   /** Natural offsets of each event from content start, before stretching. */
   offs: number[];
   contentW: number;
   leftPad: number;
   rightPad: number;
+  /** Width of a key or meter change drawn at the bar's start, when it is not at a system's start. */
+  inlineW: number;
   chordTexts: Array<{ tick: number; text: string; w: number }>;
 }
 
-function prepare(song: Song, measure: Measure): Prepared[] {
-  const total = barTicks(song.time);
+/** Room for an accidental before a notehead. */
+const ACC_W = 1.3 * SP;
+
+function prepare(song: Song, measure: Measure, view: ChordView): Prepared[] {
+  const contexts = barContexts(song);
   return allBars(song).map(({ bar, section, number, ref }) => {
-    const r = barRhythm(patternById(song, barPatternId(section, bar)), bar.chords, song.time, bar.rhythm);
-    const starts = onsets(r.events);
+    const ctx = contexts.get(bar.id)!;
+    const total = barTicks(ctx.time);
+    let events: RhythmEvent[];
+    let stemless = false;
+    let fellBack = false;
+    let notes: NoteHeads[] | undefined;
+    const accBefore: number[] = [];
+    if (bar.notes) {
+      const shown = shownAccidentals(bar.notes, ctx);
+      const written = writtenEvents(bar.notes, ctx.time);
+      const base = bottomStep(song.clef);
+      events = written.map((e) => ({ ticks: e.ticks, rest: e.rest, ...(e.tie ? { tie: true } : {}) }));
+      // An accidental prints on the first written piece of a run only: the tied rest carries it.
+      notes = written.map((e, i) => {
+        const firstOfRun = i === 0 || written[i - 1]!.run !== e.run;
+        const pitches = e.pitches.map((p, k) => ({
+          pos: stepOf(writtenOf(p, ctx)) - base,
+          acc: firstOfRun ? shown[e.run]?.[k] ?? null : null,
+        }));
+        accBefore.push(pitches.some((p) => p.acc !== null) ? ACC_W : 0);
+        return { pitches };
+      });
+    } else {
+      const r = barRhythm(patternById(song, barPatternId(section, bar)), bar.chords, ctx.time, bar.rhythm);
+      events = r.events;
+      stemless = r.stemless;
+      fellBack = r.fellBack;
+    }
+    const starts = onsets(events);
     const natural: number[] = [];
     let acc = 0;
-    for (const e of r.events) {
+    events.forEach((e, i) => {
+      acc += accBefore[i] ?? 0;
       natural.push(acc);
       acc += eventSpace(e.ticks);
-    }
+    });
     const chordTexts = bar.chords.map((c) => {
-      const text = barChordText(c, song.key);
+      const text = barChordLabel(c, ctx.key, view);
       return { tick: c.tick, text, w: measure(text, SIZE.chord) };
     });
+    let inlineW = 0;
+    if (ctx.keyChanged) inlineW += keyWidth(fifths(ctx.key), cancels(fifths(ctx.prevKey), fifths(ctx.key)));
+    if (ctx.timeChanged) inlineW += TIME_W;
     // Stretch the content until no chord symbol runs into the next one.
-    const leftPad = (bar.repeatStart ? REPEAT_W : 0) + 1.1 * SP;
+    const leftPad = (bar.repeatStart ? REPEAT_W : 0) + 1.1 * SP + inlineW;
     const rightPad = (bar.repeatEnd ? REPEAT_W : 0) + 0.6 * SP;
     let k = 1;
     chordTexts.forEach((c, i) => {
@@ -164,20 +238,24 @@ function prepare(song: Song, measure: Measure): Prepared[] {
       const need = c.w + 0.8 * SP;
       if (b - a < need && b - a > 0) k = Math.max(k, need / (b - a));
     });
-    return {
+    const out: Prepared = {
       bar,
       number,
       sectionId: section.id,
       sectionIndex: ref.section,
-      events: r.events,
-      stemless: r.stemless,
-      fellBack: r.fellBack,
+      ctx,
+      events,
+      stemless,
+      fellBack,
       offs: natural.map((o) => o * k),
       contentW: acc * k,
       leftPad,
       rightPad,
+      inlineW,
       chordTexts,
     };
+    if (notes) out.notes = notes;
+    return out;
   });
 }
 
@@ -213,11 +291,9 @@ export function jumpText(j: Jump): string {
   return JUMP_TEXT[j];
 }
 
-export function layoutSong(song: Song, measure: Measure): PageLayout[] {
-  const prepared = prepare(song, measure);
-  const sig = fifths(song.key);
+export function layoutSong(song: Song, measure: Measure, view: ChordView = "letters"): PageLayout[] {
+  const prepared = prepare(song, measure, view);
   const systems: SystemLayout[] = [];
-  const total = barTicks(song.time);
 
   // Greedy line breaking within each section. A section always starts a system, as in the PDF.
   let i = 0;
@@ -225,13 +301,20 @@ export function layoutSong(song: Song, measure: Measure): PageLayout[] {
     const first = systems.length === 0;
     const sectionIndex = prepared[i]!.sectionIndex;
     const indent = first ? FIRST_INDENT : 0;
-    const time = first ? song.time : undefined;
-    const headerW = headerWidth(song.clef, sig, time);
+    // A system's header carries the key in force at its first bar, and the meter if this is the
+    // first system or the meter changes on its first bar (the change is drawn there, not inline).
+    const head = prepared[i]!.ctx;
+    const sig = fifths(head.key);
+    const time = first || head.timeChanged ? head.time : undefined;
+    const headCancel = head.keyChanged && !first ? cancels(fifths(head.prevKey), sig) : 0;
+    const headerW = headerWidth(song.clef, sig, time) + (headCancel ? headCancel * 1.05 * SP : 0);
+    const startW = prepared[i]!.inlineW;
     const avail = CONTENT_W - indent - headerW;
     const line: Prepared[] = [];
     let used = 0;
     while (i < prepared.length && prepared[i]!.sectionIndex === sectionIndex) {
-      const w = minWidth(prepared[i]!);
+      // The first bar's change is in the header, so its inline room is not needed.
+      const w = minWidth(prepared[i]!) - (line.length === 0 ? startW : 0);
       if (line.length > 0 && used + w > avail) break;
       line.push(prepared[i]!);
       used += w;
@@ -244,17 +327,20 @@ export function layoutSong(song: Song, measure: Measure): PageLayout[] {
     const contentSum = line.reduce((a, p) => a + p.contentW, 0);
     const stretch = contentSum > 0 ? Math.max(0, avail - used) / contentSum : 0;
     let x = MARGIN_X + indent + headerW;
-    const bars: BarLayout[] = line.map((p) => {
+    const bars: BarLayout[] = line.map((p, li) => {
       const scale = 1 + stretch;
-      const w = p.leftPad + p.contentW * scale + p.rightPad;
-      const contentX = x + p.leftPad;
+      const inlineW = li === 0 ? 0 : p.inlineW;
+      const leftPad = p.leftPad - p.inlineW + inlineW;
+      const w = leftPad + p.contentW * scale + p.rightPad;
+      const contentX = x + leftPad;
       const starts = onsets(p.events);
+      const total = barTicks(p.ctx.time);
       const events = p.events.map((e, j) => ({ x: contentX + p.offs[j]! * scale, ticks: e.ticks, rest: e.rest, tie: e.tie }));
-      const chords = p.chordTexts.map((c) => ({
-        x: contentX + offsetAt(c.tick, starts, p.offs, total, p.contentW) * scale,
-        text: c.text,
-      }));
+      const xAt = (tick: number) => contentX + offsetAt(tick, starts, p.offs, total, p.contentW) * scale;
+      const chords = p.chordTexts.map((c) => ({ x: xAt(c.tick), text: c.text }));
       const out: BarLayout = {
+        xAt,
+        ctx: p.ctx,
         bar: p.bar,
         number: p.number,
         sectionId: p.sectionId,
@@ -264,12 +350,24 @@ export function layoutSong(song: Song, measure: Measure): PageLayout[] {
         events,
         stemless: p.stemless,
         fellBack: p.fellBack,
-        beams: p.stemless ? [] : beamGroups(p.events, song.time),
+        beams: p.stemless ? [] : beamGroups(p.events, p.ctx.time),
         chords,
         endingStart: false,
         endingClosed: false,
         final: false,
+        doubleBar: false,
       };
+      if (p.notes) out.notes = p.notes;
+      if (inlineW) {
+        const inline: NonNullable<BarLayout["inline"]> = { x: x + (p.bar.repeatStart ? REPEAT_W : 0) + 0.6 * SP };
+        if (p.ctx.keyChanged) {
+          const f = fifths(p.ctx.key);
+          const pf = fifths(p.ctx.prevKey);
+          inline.key = { fifths: f, prevFifths: pf, cancel: cancels(pf, f) };
+        }
+        if (p.ctx.timeChanged) inline.time = p.ctx.time;
+        out.inline = inline;
+      }
       x += w;
       return out;
     });
@@ -291,6 +389,10 @@ export function layoutSong(song: Song, measure: Measure): PageLayout[] {
       if (bar.cueBelow) {
         below.push({ kind: "cue", barId: bar.id, x: b.contentX, w: measure(bar.cueBelow, SIZE.cue), row: 0, text: bar.cueBelow });
       }
+      if (b.ctx.tempoChanged && !(first && b === bars[0])) {
+        const text = `= ${b.ctx.tempo}`;
+        above.push({ kind: "tempo", barId: bar.id, x: b.contentX, w: measure(text, SIZE.tempo + 1, { bold: true }) + 11, row: 0, text });
+      }
       if (bar.repeatEnd && bar.repeatEnd.times > 2) {
         // The PDF prints "4x" in bold under the closing barline, right-aligned to it.
         const text = `${bar.repeatEnd.times}x`;
@@ -302,7 +404,7 @@ export function layoutSong(song: Song, measure: Measure): PageLayout[] {
     const belowRows = stackRows(below);
     const hasVolta = bars.some((b) => b.bar.ending);
     const label = sectionStart ? sectionLabel(section.name) : undefined;
-    const tempo = first ? song.tempo : undefined;
+    const tempo = first ? head.tempo : undefined;
 
     const aboveH =
       CHORD_ROW + (hasVolta ? VOLTA_ROW : 0) + boxRows * BOX_ROW + (tempo ? TEMPO_EXTRA : 0) +
@@ -318,6 +420,7 @@ export function layoutSong(song: Song, measure: Measure): PageLayout[] {
       clef: song.clef,
       fifths: sig,
       headerW,
+      cancel: headCancel ? { count: headCancel, prevFifths: fifths(head.prevKey) } : undefined,
       sectionId: section.id,
       bars,
       hasVolta,
@@ -344,6 +447,9 @@ export function layoutSong(song: Song, measure: Measure): PageLayout[] {
   });
   const last = flat[flat.length - 1];
   if (last && !last.bar.repeatEnd) last.final = true;
+  flat.forEach((b, j) => {
+    if (flat[j + 1]?.ctx.keyChanged && !b.bar.repeatEnd) b.doubleBar = true;
+  });
 
   // Pages: systems are never split. One that does not fit starts the next page.
   const pages: PageLayout[] = [{ index: 0, systems: [] }];

@@ -11,8 +11,11 @@ import { RhythmGrid } from "./RhythmGrid";
 import type { Clef, Song } from "../core/song";
 import { TIME_SIGS, type TimeSig } from "../core/ticks";
 import type { ChartStore } from "./store";
+import type { ChordView } from "../core/chord";
+import { PARTS, type Part } from "../core/part";
+import { exportChart, exportChordPro, exportMusicXML } from "./sharing";
 
-function Popover({ label, children, className }: { label: ReactNode; children: (close: () => void) => ReactNode; className?: string }) {
+export function Popover({ label, children, className }: { label: ReactNode; children: (close: () => void) => ReactNode; className?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -33,8 +36,40 @@ function Popover({ label, children, className }: { label: ReactNode; children: (
 
 const CLEFS: Array<[Clef, string]> = [["treble8vb", "Treble 8vb"], ["treble", "Treble"], ["bass", "Bass"]];
 
+/** Keys in circle order, major then minor; `only` narrows to one mode (§7.2: Transpose keeps the
+ * mode, so the other mode's keys are not drawn). */
+export function KeyGrid({ current, only, onPick }: { current: Key | null; only?: Key["mode"]; onPick: (k: Key) => void }) {
+  return (
+    <>
+      {(["major", "minor"] as const)
+        .filter((m) => !only || m === only)
+        .map((mode) => (
+          <div key={mode} className="key-grid">
+            {KEYS.filter((k) => k.mode === mode).map((k) => (
+              <button key={keyName(k)} className={current && sameKey(k, current) ? "chip on" : "chip"} onClick={() => onPick(k)}>
+                {keyName(k)}
+              </button>
+            ))}
+          </div>
+        ))}
+    </>
+  );
+}
+
+const VIEWS: Array<[ChordView, string, string]> = [
+  ["letters", "A", "Letters"],
+  ["numbers", "1", "Nashville numbers"],
+  ["roman", "I", "Roman numerals"],
+];
+
 export function TopBar(props: {
   store: ChartStore;
+  view: ChordView;
+  onView: (v: ChordView) => void;
+  part: Part;
+  onPart: (p: Part) => void;
+  onFiles: (files: FileList) => void;
+  onShare: () => void;
   onTranspose: (k: Key) => void;
   onSetKey: (k: Key) => void;
   onTempo: (n: number) => void;
@@ -44,18 +79,38 @@ export function TopBar(props: {
 }) {
   const { store } = props;
   const song = store.song;
+  const fileInput = useRef<HTMLInputElement>(null);
   const [keyMode, setKeyMode] = useState<"transpose" | "set">("transpose");
   const [tempo, setTempo] = useState(String(song.tempo));
   useEffect(() => setTempo(String(song.tempo)), [song.tempo]);
 
   return (
     <header className="topbar">
+      <input
+        ref={fileInput}
+        type="file"
+        hidden
+        multiple
+        accept=".json,.cho,.chopro,.chordpro,.crd,.pro,.txt"
+        onChange={(e) => {
+          if (e.target.files?.length) props.onFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
       <Popover label={<span className="chart-name">{song.title || "Untitled"} ▾</span>} className="charts">
         {(close) => (
           <div className="charts-panel">
             <div className="chips">
               <button className="chip" onClick={() => { store.create(); close(); }}>New</button>
               <button className="chip" onClick={() => { store.duplicate(); close(); }}>Duplicate</button>
+              <button className="chip" onClick={() => { fileInput.current?.click(); close(); }}>Import…</button>
+            </div>
+            <div className="chips">
+              <span className="muted share-label">Send</span>
+              <button className="chip" onClick={() => { props.onShare(); close(); }}>Copy link</button>
+              <button className="chip" onClick={() => { exportChart(song); close(); }}>Chart file</button>
+              <button className="chip" onClick={() => { exportChordPro(song); close(); }}>ChordPro</button>
+              <button className="chip" onClick={() => { exportMusicXML(song); close(); }}>MusicXML</button>
             </div>
             <ul className="chart-list">
               {store.lib.order.map((id) => {
@@ -90,23 +145,15 @@ export function TopBar(props: {
               <button className={keyMode === "transpose" ? "on" : ""} onClick={() => setKeyMode("transpose")}>Transpose</button>
               <button className={keyMode === "set" ? "on" : ""} onClick={() => setKeyMode("set")}>Set key</button>
             </div>
-            {(["major", "minor"] as const).map((mode) => (
-              <div key={mode} className="key-grid">
-                {KEYS.filter((k) => k.mode === mode).map((k) => (
-                  <button
-                    key={keyName(k)}
-                    className={sameKey(k, song.key) ? "chip on" : "chip"}
-                    onClick={() => {
-                      if (keyMode === "transpose") props.onTranspose(k);
-                      else props.onSetKey(k);
-                      close();
-                    }}
-                  >
-                    {keyName(k)}
-                  </button>
-                ))}
-              </div>
-            ))}
+            <KeyGrid
+              current={song.key}
+              {...(keyMode === "transpose" ? { only: song.key.mode } : {})}
+              onPick={(k) => {
+                if (keyMode === "transpose") props.onTranspose(k);
+                else props.onSetKey(k);
+                close();
+              }}
+            />
           </div>
         )}
       </Popover>
@@ -147,6 +194,22 @@ export function TopBar(props: {
           <div className="chips">
             {CLEFS.map(([c, t]) => (
               <button key={c} className={c === song.clef ? "chip on" : "chip"} onClick={() => { props.onClef(c); close(); }}>{t}</button>
+            ))}
+          </div>
+        )}
+      </Popover>
+
+      <div className="seg view-seg" role="group" aria-label="Chord display">
+        {VIEWS.map(([v, l, t]) => (
+          <button key={v} className={props.view === v ? "on" : ""} title={t} onClick={() => props.onView(v)}>{l}</button>
+        ))}
+      </div>
+
+      <Popover label={<>Part <b>{PARTS.find((x) => x.id === props.part)!.label}</b></>}>
+        {(close) => (
+          <div className="chips part-chips">
+            {PARTS.map((x) => (
+              <button key={x.id} className={x.id === props.part ? "chip on" : "chip"} onClick={() => { props.onPart(x.id); close(); }}>{x.label}</button>
             ))}
           </div>
         )}

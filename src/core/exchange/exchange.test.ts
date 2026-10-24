@@ -117,6 +117,19 @@ describe("MusicXML", () => {
     expect(stack).toEqual([]);
   });
 
+  it("a note tied over the barline stops its tie on the next bar's first note", () => {
+    let s = khwabon();
+    const [a, b] = [s.sections[0]!.bars[0]!.id, s.sections[0]!.bars[1]!.id];
+    const p = pitchOf({ letter: 6, acc: 0, octave: 4 }, barContexts(s).get(a)!);
+    const runsA = writeAt(undefined, { beats: 4, unit: 4 }, 0, PPQ * 4, [p]).runs.map((r) => ({ ...r, tie: true }));
+    s = setBarNotes(s, a, runsA);
+    s = setBarNotes(s, b, writeAt(undefined, { beats: 4, unit: 4 }, 0, PPQ * 4, [p]).runs);
+    const x = toMusicXML(s);
+    const m2 = x.split("<measure ")[2]!;
+    expect(x.split("<measure ")[1]).toContain('<tie type="start"/>');
+    expect(m2).toContain('<tie type="stop"/>');
+  });
+
   it("has every bar, every chord, slash noteheads, the notes, key and meter changes", () => {
     const s = everything();
     expect((xml.match(/<measure /g) ?? []).length).toBe(allBars(s).length);

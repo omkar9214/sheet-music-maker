@@ -3,7 +3,7 @@ import { chordLabel, chordText, parseChord } from "./chord";
 import { barContexts } from "./context";
 import { khwabon } from "./khwabon";
 import { nearestOctave, pitchOf, restBar, shiftSemitone, shownAccidentals, writeAt, writtenOf, type Written } from "./notes";
-import { partKey, partSong } from "./part";
+import { concertKey, partKey, partSong } from "./part";
 import { KEYS, keyName, readSpelled, type Key } from "./pitch";
 import { setBarNotes, setKeyChange, setKeyKeepChords, setTimeChange, transpose, type Song } from "./song";
 import { PPQ } from "./ticks";
@@ -95,6 +95,13 @@ describe("parts — decision 7", () => {
     expect(keyName(partKey(key("C"), "f"))).toBe("G");
     expect(keyName(partKey(key("B"), "capo2"))).toBe("A");
     expect(keyName(partKey(key("C#"), "capo1"))).toBe("C");
+  });
+
+  it("a key picked in a part's view is stored as its concert key", () => {
+    expect(keyName(concertKey(key("D"), key("C"), "bb"))).toBe("C");
+    expect(keyName(concertKey(key("A"), key("C"), "eb"))).toBe("C");
+    expect(keyName(concertKey(key("E"), key("C"), "eb"))).toBe("G");
+    expect(keyName(concertKey(key("A"), key("B"), "capo2"))).toBe("B");
   });
 
   it("a part moves written notes up its interval, not to the nearer octave", () => {

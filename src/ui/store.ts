@@ -90,6 +90,9 @@ export interface ChartStore {
   create: () => void;
   duplicate: () => void;
   remove: (id: string) => void;
+  /** Adds a chart from outside (a file, a link) and opens it. Always a new chart, never a
+   * replacement (decision 7). */
+  add: (song: Song) => void;
 }
 
 export function useChartStore(): ChartStore {
@@ -163,6 +166,13 @@ export function useChartStore(): ChartStore {
     duplicate: () => {
       const s: Song = { ...structuredClone(song), id: newId("s"), title: `${song.title} (copy)` };
       switchTo({ ...lib, charts: { ...lib.charts, [s.id]: s }, order: [s.id, ...lib.order], current: s.id });
+    },
+    add: (song) => {
+      past.current = [];
+      future.current = [];
+      // Functional: an import can finish after other edits, and must not undo them.
+      setLib((l) => ({ ...l, charts: { ...l.charts, [song.id]: song }, order: [song.id, ...l.order], current: song.id }));
+      bump((n) => n + 1);
     },
     remove: (id) => {
       if (lib.order.length <= 1) return;

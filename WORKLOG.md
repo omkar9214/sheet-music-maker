@@ -475,3 +475,76 @@ question tool:
 **Why:** His instruction.
 
 **Open:** None asked.
+
+---
+
+## 2026-10-24 — Claude — work: sharing, key/meter/tempo changes, chord views, parts, written notes, MusicXML (decisions 7–8)
+
+**Type:** work
+**Files:**
+- new: `docs/research/chart-apps.md`; `src/core/{context,notes,part}.ts`; `src/core/exchange/{file,chordpro,musicxml}.ts` + `exchange.test.ts`; `src/core/harmony.test.ts`; `src/ui/{NotesPanel,sharing}.ts(x)`
+- changed: `src/core/{song,chord,pitch,rhythm}.ts`; `src/ui/engrave/{layout,Notation,metrics}.ts(x)`; `src/ui/{Sheet,Inspector,TopBar,FormPanel,store,suggest}.ts(x)`; `src/App.tsx`; `src/styles.css`; `AGENTS.md` §0 (decision 8 amendment); `CLAUDE.md`; `NEXT.md`; `skills/user-scenarios/chart-editor.md`
+
+**Did:** Research first (`docs/research/chart-apps.md`: iReal Pro, Dorico, MuseScore, OnSong,
+ChordPro 6, MusicXML 4, ChartBuilder, 1Chart, JotChord, transposing instruments). Then scenarios.
+Then:
+- **Sharing.**
+  - A lossless chart file, and a share link that carries the chart deflated in the URL fragment
+    (never sent to a server). Opening it adds a copy.
+  - Import from the Charts menu or by dropping a file on the window.
+  - ChordPro 6 grids in and out; lyric-style ChordPro in, one bar per chord.
+  - MusicXML 4 out: slash noteheads, `<harmony>`, notes, repeats/endings, key/meter/tempo changes,
+    cues as boxed/plain words.
+- **Harmony.**
+  - Key changes are stored as a degree above the song key, so transposing keeps a modulation's
+    interval. A change that lands on an unwritable key is respelled (D♯ → E♭, E♯ → F).
+  - Chords and notes are stored relative to the key in force, so a chorus pasted after a modulation
+    comes out in the new key.
+  - Meter for the selected bars, which reverts after them. Tempo from a bar on.
+  - Cancelling naturals (sparing rule, inference) and a double bar before a change.
+  - Chord view Letters / Nashville numbers / Roman, from the same degrees.
+  - Part Concert / B♭ / E♭ / F / Capo 1–7: display and print only. A key change typed in a part is
+    stored as concert.
+  - ½ in the chord boxes for pushes.
+  - Transpose now offers only the song's own mode (§7.2). Changing mode is "Set key".
+- **Written notes (decision 8).**
+  - A bar is slashes or notes. Notes are stored as runs (as entered) relative to the local key, and
+    split into written values and ties for the page by the step-grid rules.
+  - Palette at the bottom of the left sidebar. Keys: 1–5, A–G, ⇧ for a chord, ↑/↓, ⌘↑/⌘↓, 0, `.`,
+    T, ⌫, ←/→, Esc.
+  - Accidentals carry through the bar from the key signature. Stems, beams, flags, ledger lines,
+    seconds, dots and ties are drawn.
+  - The register follows the nearer tonic on transpose (by letters, so there-and-back is exact).
+    Parts move up their written interval.
+
+**Verified:**
+
+```
+npm run check
+EXIT=0 — verify-repo 5 checks passed, 89 tests in 7 files, tsc -b clean
+```
+
+- Round trips on his real chart: file export→import identical. The share code (2.7 KB) decodes
+  identical, and a damaged code fails cleanly. ChordPro out→in keeps every chord, section, repeat
+  and the key change. MusicXML is well-formed with 73 measures, every harmony, slashes, notes, two
+  keys, 2/4 and times="4".
+- Barline tie test proven by toggling: 1 failed without, 9 passed with.
+- Pane on 5194, real keys and clicks. **His storage there ("Bang Bang") was backed up first and
+  restored after, read back to confirm.**
+  - Notes in bar 2: `4 d e f ↓ 3 b ⇧d 0 4 c t c` stored D♯ E F♮ B+D♯ rest C~C. The quarter chord
+    across mid-bar was written as tied 8ths, and the rests by the beat. DOM checked: every stem
+    present.
+  - Key change bar 70 → C♯: C♯maj7 / D♯min11.
+  - Bar 4 → 2/4: inline meter, and bar 5 back to 4/4 (storage read).
+  - Numbers view: 1maj7 / 2min11 / 6m7♯9 7m7♯9.
+  - Part B♭: C♯maj7 and E♭maj7 after the change, with the "Part · B♭" badge.
+  - Share link → "Opened …", a new copy, fragment cleared.
+  - ChordPro dropped on the window → "Imported “Dropped Song”", 2 sections.
+
+**Open:**
+- He hasn't tried any of it.
+- MusicXML not opened in MuseScore.
+- Notes: no click-to-place, triplets, voices or angled beams.
+- The cross-bar tie is drawn only to the barline.
+- Real print dialog still unchecked.
+- `NEXT.md` items 6–10.
