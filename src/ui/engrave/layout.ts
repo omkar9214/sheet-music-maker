@@ -13,7 +13,7 @@ import { PPQ, barTicks, isCompound, type TimeSig } from "../../core/ticks";
 import {
   BELOW_BASELINE, BELOW_MIN, BELOW_ROW, BOX_PAD_X, BOX_ROW, CHORD_ROW, CONTENT_W, FIRST_INDENT,
   LABEL_GAP, LINE, MARGIN_BOTTOM, MARGIN_X, PAGE1_CONTENT_TOP, PAGEN_CONTENT_TOP, PAGE_H, SIZE, SP,
-  STAFF_H, SYSTEM_GAP, TEMPO_EXTRA, TEMPO_RAISE, VOLTA_ROW,
+  STAFF_H, SYSTEM_GAP, TEMPO_EXTRA, TEMPO_RAISE, TEMPO_X, VOLTA_ROW,
 } from "./metrics";
 
 export interface TextStyle {
@@ -113,7 +113,7 @@ export interface PageLayout {
 
 /**
  * Horizontal space for a duration. **Inference**, tuned so that his strum bar needs about 104 pt
- * and four of them fit even the first system (indent, clef, five sharps, 4/4), as in the PDF. At
+ * and four of them fit even the first system (clef, five sharps, 4/4), as in the PDF. At
  * 1.2 + 2.0·√ it needed 111 pt and the Intro broke 3 + 1. It grows with the square root of the
  * duration, as engravers' spacing tables do (Gould, "Spacing": proportional, not linear).
  */
@@ -420,7 +420,7 @@ export function layoutSong(song: Song, measure: Measure, view: ChordView = "lett
     // The tempo sits in the chord row, left of the first chord, as in his PDF, where five sharps
     // made room. In C the first chord starts right after the clef and the two collided ("♩ = 90C",
     // the sweep). When there is no room, the tempo goes up a row.
-    const tempoEnd = MARGIN_X + indent + 1.8 * SP + 9 + (tempo ? measure(`= ${tempo}`, SIZE.tempo + 1, { bold: true }) : 0) + (isCompound(head.time) ? 4 : 0);
+    const tempoEnd = MARGIN_X + indent + TEMPO_X + 9 + (tempo ? measure(`= ${tempo}`, SIZE.tempo + 1, { bold: true }) : 0) + (isCompound(head.time) ? 4 : 0);
     const firstChordX = bars[0]?.chords[0]?.x ?? Infinity;
     const tempoRaised = !!tempo && firstChordX < tempoEnd + 0.8 * SP;
 

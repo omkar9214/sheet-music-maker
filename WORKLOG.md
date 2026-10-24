@@ -867,3 +867,63 @@ Later pushes still need him to ask.
 **Why:** His instruction.
 
 **Open:** None.
+
+---
+
+## 2026-10-24 — Claude — decision 16: no first-line indent; every line the same length
+
+**Type:** decision
+**Files:** none — recorded before any code moved
+**Did:** Omkar sent a screenshot of an Intro (G major, ♩ = 123, Em7 Cmaj7 Am7 Bm7, 1st/2nd endings) and asked, verbatim:
+
+> *"Why first line is not as long as second?"*
+
+Answered: it is MuseScore's first-system indent, 5 sp (24.8 pt), measured off his PDF. Offered removing it. He replied, verbatim:
+
+> *"Remove the first-line indent so every line is the same length."*
+
+**Inference, marked as inference:** Indent 0 on every page and in print. The staff on the first system
+starts at the left margin like the rest. This departs from the reference PDF on purpose. The chart in
+his screenshot is not in the repo; it is his, in his own browser.
+
+**Why:** His instruction.
+
+**Open:** None.
+
+**Addendum, same session:** Omkar, verbatim, while it was being built:
+
+> *"you will have to adjust accordingly to the text above, so it makes sense"*
+
+**Inference, marked as inference:** "the text above" means what sits over the first system: the
+section label ("Intro:"), the tempo mark (♩ = 123), and the first boxed cue. With the staff moved left,
+they have to be re-placed so they line up with it and don't collide. What "makes sense" means is
+settled by measuring them against the staff, below.
+
+---
+
+## 2026-10-24 — Claude — work: no first-line indent; label, tempo and staff share the left edge (decision 16)
+
+**Type:** work
+**Files:** `src/ui/engrave/metrics.ts` (`FIRST_INDENT = 0`, `TEMPO_X` new), `src/ui/engrave/layout.ts`,
+`src/ui/engrave/Notation.tsx`, `src/ui/engrave/layout.test.ts`
+**Did:** The first system now starts at the margin like every other. The tempo mark sat 1.8 sp in from
+the staff, which was MuseScore's spot on an indented line. With no indent, that left it 9 pt right of
+"Intro:", so it now starts at the staff's edge too (`TEMPO_X = 0`), per his "adjust accordingly to the
+text above". The tempo-lift test changed with it: in C, "= 90" now fits before the first chord and
+stays down, and at ♩ = 123 (his Intro) it is still lifted. The rule is unchanged; only the fixture
+moved.
+
+**Verified:**
+
+```
+npm run check
+EXIT=0 — 108 tests in 9 files
+```
+
+- New test: every system's `x0` is `MARGIN_X`. It fails with the old 5 sp.
+- Browser, 5195, the chart set to G at ♩ = 123 like his screenshot (backed up first, then restored to
+  the same 12094 chars). Live DOM in page units: "Intro:" 42.5, ♩ 42.5, staff lines from 42.5, every
+  clef at 45.5. Zoomed screenshot taken.
+
+**Open:** Not pushed. The boxed cue in his screenshot sits above bar 1's content, not at the margin.
+That is unchanged, because it belongs to the bar, not to the line.

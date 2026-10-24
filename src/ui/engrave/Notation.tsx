@@ -8,7 +8,7 @@ import type { BarLayout, PageLayout, SystemLayout } from "./layout";
 import {
   BOX_H, BOX_PAD_X, BOX_ROW, CHORD_BASELINE, CHORD_ROW, GLYPH, LINE, MARGIN_X, MUSIC_FONT, MUSIC_SIZE,
   PAGE_NUMBER_BASELINE, PAGE_W, SIZE, SOURCE_BASELINE, SP, STAFF_H, TEXT_FONT, TITLE_BASELINE, VOLTA_ROW,
-  BELOW_BASELINE, BELOW_ROW, LABEL_GAP,
+  BELOW_BASELINE, BELOW_ROW, LABEL_GAP, TEMPO_X,
 } from "./metrics";
 
 const INK = "var(--ink-score, #000)";
@@ -461,9 +461,9 @@ function System({ s }: { s: SystemLayout }) {
       <Header s={s} />
       {s.tempo !== undefined && (
         <g>
-          <Glyph x={s.x0 + 1.8 * SP} y={s.y - CHORD_BASELINE - (s.tempoRaise ?? 0)} g={GLYPH.metQuarter} size={13} />
-          {s.tempoDotted && <Glyph x={s.x0 + 1.8 * SP + 8} y={s.y - CHORD_BASELINE - (s.tempoRaise ?? 0)} g={GLYPH.metDot} size={13} />}
-          <Text x={s.x0 + 1.8 * SP + (s.tempoDotted ? 13 : 9)} y={s.y - CHORD_BASELINE - (s.tempoRaise ?? 0)} size={SIZE.tempo + 1} bold>{`= ${s.tempo}`}</Text>
+          <Glyph x={s.x0 + TEMPO_X} y={s.y - CHORD_BASELINE - (s.tempoRaise ?? 0)} g={GLYPH.metQuarter} size={13} />
+          {s.tempoDotted && <Glyph x={s.x0 + TEMPO_X + 8} y={s.y - CHORD_BASELINE - (s.tempoRaise ?? 0)} g={GLYPH.metDot} size={13} />}
+          <Text x={s.x0 + TEMPO_X + (s.tempoDotted ? 13 : 9)} y={s.y - CHORD_BASELINE - (s.tempoRaise ?? 0)} size={SIZE.tempo + 1} bold>{`= ${s.tempo}`}</Text>
         </g>
       )}
       {s.barNumber !== undefined && (

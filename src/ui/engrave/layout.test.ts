@@ -32,6 +32,10 @@ describe("layout of his chart (AGENTS.md §9.10: the real path)", () => {
     expect(systems[0]!.bars.length).toBe(4);
   });
 
+  it("starts every system at the left margin, the first included (decision 16)", () => {
+    for (const s of systems) expect(s.x0).toBe(MARGIN_X);
+  });
+
   it("justifies every system to the right margin, and nothing runs past it", () => {
     for (const s of systems) {
       const last = s.bars[s.bars.length - 1]!;
@@ -96,8 +100,11 @@ describe("layout of his chart (AGENTS.md §9.10: the real path)", () => {
   it("lifts the tempo only when it would hit the first chord (the sweep): in C yes, in B (his PDF) no", () => {
     const real: Measure = (t, size) => t.length * size * 0.5;
     expect(layoutSong(song, real)[0]!.systems[0]!.tempoRaise).toBe(0);
+    // In C at ♩ = 123 (his Intro, decision 16). At 90 it collided only while the tempo sat 1.8 sp in;
+    // flush with the staff (TEMPO_X = 0) "= 90" now fits before the first chord, and stays down.
     const c = transpose(song, KEYS[0]!);
-    expect(layoutSong(c, real)[0]!.systems[0]!.tempoRaise).toBeGreaterThan(0);
+    expect(layoutSong({ ...c, tempo: 123 }, real)[0]!.systems[0]!.tempoRaise).toBeGreaterThan(0);
+    expect(layoutSong(c, real)[0]!.systems[0]!.tempoRaise).toBe(0);
     // In 6/8 the tempo's beat is the dotted quarter.
     expect(layoutSong({ ...song, time: { beats: 6, unit: 8 } }, real)[0]!.systems[0]!.tempoDotted).toBe(true);
   });

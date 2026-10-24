@@ -16,8 +16,12 @@ export const STAFF_H = 4 * SP;
 /** The staff runs from 42.5 to 569.3, which is a 15 mm margin both sides. */
 export const MARGIN_X = 42.5;
 export const CONTENT_W = PAGE_W - 2 * MARGIN_X;
-/** The first system starts at 67.3, an indent of 24.8 pt (5 sp). */
-export const FIRST_INDENT = 5 * SP;
+/**
+ * No first-system indent (decision 16: "Remove the first-line indent so every line is the same
+ * length"). His PDF has MuseScore's 5 sp (24.8 pt, the staff at 67.3), and that is what this was
+ * until 2026-10-24.
+ */
+export const FIRST_INDENT = 0;
 
 export const MARGIN_TOP = 42.5;
 export const MARGIN_BOTTOM = 42.5;
@@ -73,6 +77,13 @@ export const BOX_H = 15;
 export const BOX_ROW = 17;
 export const BOX_PAD_X = 3.5;
 export const TEMPO_EXTRA = 8;
+/**
+ * The tempo mark's left edge, from the staff's start. It was 1.8 sp (MuseScore's, over the clef of an
+ * indented first system). With no indent (decision 16) that left it 9 pt right of the section label
+ * at the margin: two left edges a hair apart. So the label, the tempo and the staff now share one
+ * edge (decision 16's addendum: "adjust accordingly to the text above, so it makes sense").
+ */
+export const TEMPO_X = 0;
 /** A tempo mark lifted clear of the first chord: one chord row's text height plus a gap. */
 export const TEMPO_RAISE = 13;
 export const LABEL_GAP = 3;
