@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { khwabon } from "../../core/khwabon";
-import { allBars, updateBar } from "../../core/song";
+import { KEYS } from "../../core/pitch";
+import { allBars, transpose, updateBar } from "../../core/song";
 import { layoutSong, type Measure } from "./layout";
 import { MARGIN_BOTTOM, MARGIN_X, CONTENT_W, PAGE_H, SIZE } from "./metrics";
 
@@ -89,5 +90,14 @@ describe("layout of his chart (AGENTS.md §9.10: the real path)", () => {
     const s2 = updateBar(song, outro[outro.length - 1]!.id, { repeatEnd: undefined });
     const flat = layoutSong(s2, measure).flatMap((p) => p.systems.flatMap((s) => s.bars));
     expect(flat[flat.length - 1]!.final).toBe(true);
+  });
+
+  it("lifts the tempo only when it would hit the first chord (the sweep): in C yes, in B (his PDF) no", () => {
+    const real: Measure = (t, size) => t.length * size * 0.5;
+    expect(layoutSong(song, real)[0]!.systems[0]!.tempoRaise).toBe(0);
+    const c = transpose(song, KEYS[0]!);
+    expect(layoutSong(c, real)[0]!.systems[0]!.tempoRaise).toBeGreaterThan(0);
+    // In 6/8 the tempo's beat is the dotted quarter.
+    expect(layoutSong({ ...song, time: { beats: 6, unit: 8 } }, real)[0]!.systems[0]!.tempoDotted).toBe(true);
   });
 });

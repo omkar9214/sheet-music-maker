@@ -10,7 +10,7 @@ import type { BarContext } from "../core/context";
 import { keyName, sameKey, type Key } from "../core/pitch";
 import { TIME_SIGS, type TimeSig } from "../core/ticks";
 import { KeyGrid, Popover } from "./TopBar";
-import { STEP_TICKS, stepCounts, type Step } from "../core/rhythm";
+import { STEP_TICKS, patternFits, stepCounts, type Step } from "../core/rhythm";
 import { barPatternId, findBar } from "../core/song";
 import { beatTicks } from "../core/ticks";
 import { RhythmGrid } from "./RhythmGrid";
@@ -123,7 +123,7 @@ function SavePattern({ onSave, count }: { onSave: (name: string) => void; count:
  * their bar on, as on the page. A meter is set for the selected bars only, and the bar after them
  * goes back (`setTimeForBars`), because an odd bar of 2/4 is the common case.
  */
-function HarmonyRows({ bar, ctx, a }: { bar: Bar; ctx: BarContext; a: InspectorActions }) {
+function HarmonyRows({ bar, ctx, first, a }: { bar: Bar; ctx: BarContext; first: boolean; a: InspectorActions }) {
   const [tempo, setTempo] = useState("");
   useEffect(() => setTempo(bar.tempoChange !== undefined ? String(bar.tempoChange) : ""), [bar.id, bar.tempoChange]);
   const commitTempo = () => {
@@ -132,8 +132,11 @@ function HarmonyRows({ bar, ctx, a }: { bar: Bar; ctx: BarContext; a: InspectorA
     else if (n >= 20 && n <= 400) a.setTempo(n);
     else setTempo(bar.tempoChange !== undefined ? String(bar.tempoChange) : "");
   };
+  // Bar 1's key and tempo are the song's, set in the top bar; a change there would change nothing
+  // (§7.2: not drawn).
   return (
     <>
+      {!first && (
       <div className="row">
         <span className="lbl">Key</span>
         <div className="chips">
@@ -147,6 +150,7 @@ function HarmonyRows({ bar, ctx, a }: { bar: Bar; ctx: BarContext; a: InspectorA
           </Popover>
         </div>
       </div>
+      )}
       <div className="row">
         <span className="lbl">Time</span>
         <div className="chips">
@@ -158,6 +162,7 @@ function HarmonyRows({ bar, ctx, a }: { bar: Bar; ctx: BarContext; a: InspectorA
           {bar.timeChange && <Chip onClick={() => a.setTime(null)} title="Remove the meter change">×</Chip>}
         </div>
       </div>
+      {!first && (
       <div className="row">
         <span className="lbl">Tempo</span>
         <div className="chips">
@@ -174,6 +179,7 @@ function HarmonyRows({ bar, ctx, a }: { bar: Bar; ctx: BarContext; a: InspectorA
           </label>
         </div>
       </div>
+      )}
     </>
   );
 }
@@ -186,6 +192,7 @@ export function Inspector(props: {
   steps: Step[] | null;
   /** What is in force at the first selected bar. */
   ctx: BarContext;
+  isFirstBar: boolean;
   focusCue: { which: "above" | "below"; n: number } | null;
   onCueFocused: () => void;
   a: InspectorActions;
@@ -208,7 +215,13 @@ export function Inspector(props: {
   const first = bars[0]!;
   const last = bars[bars.length - 1]!;
   const sectionName = song.sections[findBar(song, first.bar.id)!.section]!.name;
-  const samePattern = bars.every((b) => b.pattern === first.pattern) ? first.pattern : null;
+  // What each bar draws: a pattern that does not fit the meter draws Beats, so Beats is what shows as
+  // chosen (the sweep: in 6/8 no chip was on while every bar drew beats).
+  const drawn = (id: string) => {
+    const p = song.patterns.find((x) => x.id === id);
+    return p && patternFits(p, props.ctx.time) ? id : "beats";
+  };
+  const samePattern = bars.every((b) => drawn(b.pattern) === drawn(first.pattern)) ? drawn(first.pattern) : null;
   const noneOwn = bars.every((b) => !b.bar.rhythm);
   const sameOwn = first.bar.rhythm && bars.every((b) => b.bar.rhythm === first.bar.rhythm) ? first.bar.rhythm : null;
 
@@ -233,7 +246,7 @@ export function Inspector(props: {
         <div className="row">
           <span className="lbl">Rhythm</span>
           <div className="chips">
-            {song.patterns.map((p) => (
+            {song.patterns.filter((p) => patternFits(p, props.ctx.time)).map((p) => (
               <Chip key={p.id} on={noneOwn && samePattern === p.id} onClick={() => a.setRhythm(p.id)}>{p.name}</Chip>
             ))}
             {sameOwn && <span className="chip on custom">Custom</span>}
@@ -268,7 +281,7 @@ export function Inspector(props: {
         </div>
       </div>
 
-      <HarmonyRows bar={first.bar} ctx={props.ctx} a={a} />
+      <HarmonyRows bar={first.bar} ctx={props.ctx} first={props.isFirstBar} a={a} />
 
       <div className="row">
         <span className="lbl">Ending</span>

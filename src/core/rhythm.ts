@@ -335,3 +335,9 @@ export function writtenParts(startTicks: number, ticks: number, rest: boolean, t
   const n = ticks / STEP_TICKS;
   return (rest ? writeRest(s, n, ts) : writeNote(s, n, ts)).map((x) => x * STEP_TICKS);
 }
+
+/** Whether a pattern can be drawn in a meter. Built-ins always can; a 4/4 strum in 6/8 cannot, and
+ * is not offered there (§7.2; the sweep found Strum shown "on" in 6/8 while bars drew beats). */
+export function patternFits(p: Pattern, ts: TimeSig): boolean {
+  return p.text === "" || parsePattern(p.text, ts).ok;
+}

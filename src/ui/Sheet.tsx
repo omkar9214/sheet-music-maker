@@ -127,6 +127,9 @@ function ChordCells(props: {
 
   useLayoutEffect(() => {
     alive.current = true;
+    // Under a bar near the window's bottom edge, focusing the box scrolled only the box itself into
+    // view; the beat labels and suggestions under it stayed hidden (the sweep).
+    box.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
     return () => {
       alive.current = false;
     };
@@ -339,6 +342,11 @@ export function Sheet(props: Props) {
                 <>
                   <rect className="meta-hit" x={MARGIN_X + 80} y={TITLE_BASELINE - 22} width={PAGE_W - 2 * MARGIN_X - 160} height={28} onClick={() => props.onEditMeta("title")} />
                   <rect className="meta-hit" x={PAGE_W - MARGIN_X - 160} y={SOURCE_BASELINE - 12} width={160} height={16} onClick={() => props.onEditMeta("source")} />
+                  {/* An empty title or source line is invisible, so on screen (never in print) it
+                      shows its name, and a new chart's user can see there is something to click
+                      (the sweep). */}
+                  {!song.title && <text className="meta-ghost" x={PAGE_W / 2} y={TITLE_BASELINE} textAnchor="middle" fontSize={SIZE.title} fontFamily={TEXT_FONT}>Title</text>}
+                  {!song.source && <text className="meta-ghost" x={PAGE_W - MARGIN_X} y={SOURCE_BASELINE} textAnchor="end" fontSize={SIZE.source} fontFamily={TEXT_FONT}>Source</text>}
                 </>
               )}
               {p.systems.flatMap((s) =>

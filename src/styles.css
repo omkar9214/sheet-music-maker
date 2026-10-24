@@ -128,9 +128,11 @@ button { font: inherit; color: inherit; }
 }
 .form-count button:hover:not(:disabled), .form-tools button:hover:not(:disabled) { background: rgba(0, 0, 0, 0.07); color: var(--ink); }
 .form-count button:disabled, .form-tools button:disabled { opacity: 0.3; cursor: default; }
-/* Tools show on the row being pointed at or worked on, so the list reads as a song map, not a toolbar. */
-.form-tools { grid-column: 2 / 4; display: none; gap: 2px; margin-top: 2px; }
-.form-list li:hover .form-tools, .form-list li.on .form-tools { display: flex; }
+/* Tools show on the row being pointed at or worked on, so the list reads as a song map, not a toolbar.
+   Their line is always reserved: shown with display, it pushed every row below down as the selection
+   moved, and clicks landed on the wrong row (the sweep). */
+.form-tools { grid-column: 2 / 4; display: flex; visibility: hidden; gap: 2px; margin-top: 2px; }
+.form-list li:hover .form-tools, .form-list li.on .form-tools { visibility: visible; }
 .form-add { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 2px 0; border-top: 1px solid var(--line); }
 .form-add .chip { height: 24px; padding: 0 7px; font-size: 12px; }
 
@@ -172,6 +174,7 @@ button { font: inherit; color: inherit; }
 .edit-layer .bar-hit { fill: transparent; cursor: default; }
 .edit-layer .meta-hit { fill: transparent; cursor: text; }
 .edit-layer .meta-hit:hover { fill: var(--accent-soft); }
+.edit-layer .meta-ghost { fill: #b9b2a6; pointer-events: none; }
 .edit-layer .sel { fill: var(--accent-soft); pointer-events: none; }
 .edit-layer .sel.focus { stroke: var(--accent); stroke-width: 0.9; }
 

@@ -23,8 +23,19 @@ export function Popover({ label, children, className }: { label: ReactNode; chil
     const off = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
+    // Escape closes the menu and stops there: captured first, so the editor's own Escape (deselect)
+    // never sees it, whatever order the listeners were added in.
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      setOpen(false);
+    };
     window.addEventListener("mousedown", off);
-    return () => window.removeEventListener("mousedown", off);
+    window.addEventListener("keydown", esc, { capture: true });
+    return () => {
+      window.removeEventListener("mousedown", off);
+      window.removeEventListener("keydown", esc, { capture: true });
+    };
   }, [open]);
   return (
     <div className={`pop ${className ?? ""}`} ref={ref}>
@@ -67,6 +78,8 @@ export function TopBar(props: {
   view: ChordView;
   onView: (v: ChordView) => void;
   part: Part;
+  /** The key the page shows: the part's, when a part is chosen. */
+  shownKey: Key;
   onPart: (p: Part) => void;
   onFiles: (files: FileList) => void;
   onShare: () => void;
@@ -138,7 +151,7 @@ export function TopBar(props: {
         )}
       </Popover>
 
-      <Popover label={<>Key <b>{keyName(song.key)}</b></>}>
+      <Popover label={<>Key <b>{keyName(song.key)}</b>{!sameKey(props.shownKey, song.key) && <span className="muted"> · {keyName(props.shownKey)}</span>}</>}>
         {(close) => (
           <div className="key-panel">
             <div className="seg">

@@ -381,11 +381,33 @@ export function setTimeForBars(song: Song, ids: readonly string[], to: TimeSig):
   if (!first || !last) return song;
   const ctx = barContexts(song);
   const before = ctx.get(first)!.prevTime;
+  // Picking the meter already in force before the selection means "no change here" (decision 10's
+  // sweep: it stored a change that changed nothing).
+  if (before.beats === to.beats && before.unit === to.unit) return clearTimeForBars(song, ids);
   const flat = allBars(song);
   const after = flat[flat.findIndex((x) => x.bar.id === last) + 1]?.bar;
   let s = updateBar(song, first, { timeChange: to });
   for (const id of ids.slice(1)) s = updateBar(s, id, { timeChange: undefined });
   if (after && !after.timeChange && (before.beats !== to.beats || before.unit !== to.unit)) s = updateBar(s, after.id, { timeChange: before });
+  return fitToMeters(s);
+}
+
+/**
+ * Removes the selection's meter change, and the change back after it if that is the one
+ * `setTimeForBars` put there. The sweep found the × leaving that one behind: harmless on the page,
+ * but a change nobody made, which turned up again in exports.
+ */
+export function clearTimeForBars(song: Song, ids: readonly string[]): Song {
+  const first = ids[0];
+  const last = ids[ids.length - 1];
+  if (!first || !last) return song;
+  const before = barContexts(song).get(first)!.prevTime;
+  const flat = allBars(song);
+  const after = flat[flat.findIndex((x) => x.bar.id === last) + 1]?.bar;
+  let s = updateBar(song, first, { timeChange: undefined });
+  if (after?.timeChange && after.timeChange.beats === before.beats && after.timeChange.unit === before.unit) {
+    s = updateBar(s, after.id, { timeChange: undefined });
+  }
   return fitToMeters(s);
 }
 
@@ -447,8 +469,18 @@ export function toggleEnding(song: Song, ids: readonly string[], n: number): Son
 }
 
 /** Deletes the selected bars, keeping at least one bar in each section they touch. */
+/**
+ * Deletes the selected bars. A section whose every bar is selected goes as a whole, rather than
+ * leaving one empty bar behind (the sweep: selecting a section in Form and pressing Delete left a
+ * stub). The chart always keeps at least one section.
+ */
 export function deleteBars(song: Song, ids: readonly string[]): Song {
-  return ids.reduce((s, id) => deleteBar(s, id), song);
+  const chosen = new Set(ids);
+  const whole = song.sections.filter((s) => s.bars.every((b) => chosen.has(b.id)));
+  const keep = whole.length === song.sections.length ? whole.slice(1) : whole;
+  const gone = new Set(keep.map((s) => s.id));
+  const pruned: Song = { ...song, sections: song.sections.filter((s) => !gone.has(s.id)) };
+  return ids.reduce((s, id) => deleteBar(s, id), pruned);
 }
 
 /** A section's bar count, set from the Form panel: adds empty bars at the end, or removes from it. */
@@ -520,8 +552,10 @@ export function setBarsRhythm(song: Song, ids: readonly string[], text: string):
     const r = findBar(s, id);
     if (!r) return s;
     const sec = s.sections[r.section]!;
-    if (named) return updateBar(s, id, { rhythm: undefined, pattern: named.id === sec.pattern ? undefined : named.id });
-    return updateBar(s, id, { rhythm: text });
+    // A rhythm makes the bar a slash bar again: notes written before decision 9 can only be cleared
+    // this way now that note entry is gone (the sweep found such a bar had no way back).
+    if (named) return updateBar(s, id, { rhythm: undefined, notes: undefined, pattern: named.id === sec.pattern ? undefined : named.id });
+    return updateBar(s, id, { rhythm: text, notes: undefined });
   }, song);
 }
 
@@ -535,9 +569,9 @@ export function setBarsPattern(song: Song, ids: readonly string[], patternId: st
     if (mine.length === 0) continue;
     if (mine.length === sec.bars.length) {
       out = updateSection(out, sec.id, { pattern: patternId });
-      out = updateBars(out, mine, { pattern: undefined, rhythm: undefined });
+      out = updateBars(out, mine, { pattern: undefined, rhythm: undefined, notes: undefined });
     } else {
-      out = updateBars(out, mine, { pattern: patternId === sec.pattern ? undefined : patternId, rhythm: undefined });
+      out = updateBars(out, mine, { pattern: patternId === sec.pattern ? undefined : patternId, rhythm: undefined, notes: undefined });
     }
   }
   return out;

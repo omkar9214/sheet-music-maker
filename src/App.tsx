@@ -19,7 +19,7 @@ import {
   addSection, allBars, barPatternId, barRange, clearChords, copyBars, deleteBars, deletePattern,
   deleteSection, duplicateSection, findBar, insertBar, moveSection, pasteBars, patternById,
   saveRhythmAsPattern, setBarCells, setBarCount, setBarsPattern, setBarsRhythm,
-  setKeyChange, setKeyKeepChords, setPatterns, setRepeat, setTempoChange, setTime, setTimeChange,
+  clearTimeForBars, setKeyChange, setKeyKeepChords, setPatterns, setRepeat, setTempoChange, setTime,
   setTimeForBars, toggleEnding, transpose, updateBar, updateSection, type Bar, type BarClip, type Song,
 } from "./core/song";
 import { FormPanel, type FormActions } from "./ui/FormPanel";
@@ -236,6 +236,9 @@ export function App() {
       if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return;
       const mod = ev.metaKey || ev.ctrlKey;
       const k = ev.key;
+      // A focused button keeps Enter and Space for itself. The sweep found Enter on a just-clicked
+      // chip both re-pressed it and opened chord entry.
+      if (t.tagName === "BUTTON" && (k === "Enter" || k === " ")) return;
       if (mod && k.toLowerCase() === "z") {
         ev.preventDefault();
         if (ev.shiftKey) store.redo();
@@ -293,7 +296,9 @@ export function App() {
         ev.preventDefault();
         edit((s) => clearChords(s, ids));
       } else if (k === "Escape") {
-        setSel(null);
+        // Escape closes an open menu first; only an Escape with no menu open deselects (the sweep:
+        // closing the key menu also dropped the selection).
+        if (!document.querySelector(".pop-panel")) setSel(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -324,7 +329,7 @@ export function App() {
     // The key is picked as shown; in a part view that is the part's key, so it is moved back to
     // concert by the same interval before it is stored.
     setKeyChange: (k) => ids[0] && edit((s) => setKeyChange(s, ids[0]!, k ? concertKey(k, s.key, part) : null)),
-    setTime: (t) => ids[0] && edit((s) => (t ? setTimeForBars(s, ids, t) : setTimeChange(s, ids[0]!, null))),
+    setTime: (t) => ids[0] && edit((s) => (t ? setTimeForBars(s, ids, t) : clearTimeForBars(s, ids))),
     setTempo: (n) => ids[0] && edit((s) => setTempoChange(s, ids[0]!, n)),
     insertBar: (before) => {
       const at = before ? ids[0] : ids[ids.length - 1];
@@ -376,6 +381,7 @@ export function App() {
         view={view}
         onView={(v) => setView({ view: v, part })}
         part={part}
+        shownKey={viewSong.key}
         onPart={(p) => setView({ view, part: p })}
         onFiles={(f) => void onFiles(f)}
         onShare={() => void onShare()}
@@ -434,6 +440,7 @@ export function App() {
           chordsText={sel ? chordText(sel.focus) : ""}
           steps={focusRhythm}
           ctx={ctxOf(ids[0] ?? flatIds[0]!)}
+          isFirstBar={ids[0] === flatIds[0]}
           focusCue={focusCue}
           onCueFocused={() => setFocusCue(null)}
           a={actions}

@@ -9,11 +9,11 @@ import { shownAccidentals, stepOf, writtenEvents, writtenOf } from "../../core/n
 import { fifths } from "../../core/pitch";
 import { barRhythm, beamGroups, onsets, type RhythmEvent } from "../../core/rhythm";
 import { allBars, barPatternId, patternById, type Bar, type Clef, type Jump, type Marker, type Song } from "../../core/song";
-import { PPQ, barTicks, type TimeSig } from "../../core/ticks";
+import { PPQ, barTicks, isCompound, type TimeSig } from "../../core/ticks";
 import {
   BELOW_BASELINE, BELOW_MIN, BELOW_ROW, BOX_PAD_X, BOX_ROW, CHORD_ROW, CONTENT_W, FIRST_INDENT,
   LABEL_GAP, LINE, MARGIN_BOTTOM, MARGIN_X, PAGE1_CONTENT_TOP, PAGEN_CONTENT_TOP, PAGE_H, SIZE, SP,
-  STAFF_H, SYSTEM_GAP, TEMPO_EXTRA, VOLTA_ROW,
+  STAFF_H, SYSTEM_GAP, TEMPO_EXTRA, TEMPO_RAISE, VOLTA_ROW,
 } from "./metrics";
 
 export interface TextStyle {
@@ -93,6 +93,10 @@ export interface SystemLayout {
   label?: string;
   sectionId: string;
   tempo?: number;
+  /** How far the tempo mark is lifted above the chord row, to clear the first chord. */
+  tempoRaise?: number;
+  /** In compound time the beat is a dotted quarter: ♩. = n. */
+  tempoDotted?: boolean;
   barNumber?: number;
   bars: BarLayout[];
   hasVolta: boolean;
@@ -405,9 +409,15 @@ export function layoutSong(song: Song, measure: Measure, view: ChordView = "lett
     const hasVolta = bars.some((b) => b.bar.ending);
     const label = sectionStart ? sectionLabel(section.name) : undefined;
     const tempo = first ? head.tempo : undefined;
+    // The tempo sits in the chord row, left of the first chord, as in his PDF, where five sharps
+    // made room. In C the first chord starts right after the clef and the two collided ("♩ = 90C",
+    // the sweep). When there is no room, the tempo goes up a row.
+    const tempoEnd = MARGIN_X + indent + 1.8 * SP + 9 + (tempo ? measure(`= ${tempo}`, SIZE.tempo + 1, { bold: true }) : 0) + (isCompound(head.time) ? 4 : 0);
+    const firstChordX = bars[0]?.chords[0]?.x ?? Infinity;
+    const tempoRaised = !!tempo && firstChordX < tempoEnd + 0.8 * SP;
 
     const aboveH =
-      CHORD_ROW + (hasVolta ? VOLTA_ROW : 0) + boxRows * BOX_ROW + (tempo ? TEMPO_EXTRA : 0) +
+      CHORD_ROW + (hasVolta ? VOLTA_ROW : 0) + boxRows * BOX_ROW + (tempo ? TEMPO_EXTRA : 0) + (tempoRaised ? TEMPO_RAISE : 0) +
       (label ? SIZE.label * 0.72 + LABEL_GAP : 0) + 2;
     const belowH = STAFF_H + Math.max(BELOW_MIN, belowRows ? BELOW_BASELINE + (belowRows - 1) * BELOW_ROW + 4 : 0);
 
@@ -431,7 +441,11 @@ export function layoutSong(song: Song, measure: Measure, view: ChordView = "lett
     };
     if (time) sys.time = time;
     if (label) sys.label = label;
-    if (tempo) sys.tempo = tempo;
+    if (tempo) {
+      sys.tempo = tempo;
+      sys.tempoRaise = tempoRaised ? TEMPO_RAISE + (hasVolta ? VOLTA_ROW : 0) + boxRows * BOX_ROW : 0;
+      sys.tempoDotted = isCompound(head.time);
+    }
     if (!first) sys.barNumber = bars[0]!.number;
     systems.push(sys);
   }

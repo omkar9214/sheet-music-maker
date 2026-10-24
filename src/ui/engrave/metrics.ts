@@ -73,6 +73,8 @@ export const BOX_H = 15;
 export const BOX_ROW = 17;
 export const BOX_PAD_X = 3.5;
 export const TEMPO_EXTRA = 8;
+/** A tempo mark lifted clear of the first chord: one chord row's text height plus a gap. */
+export const TEMPO_RAISE = 13;
 export const LABEL_GAP = 3;
 /** Below: "Acoustic Guitar only" sits on a baseline 15.5 pt under the staff's bottom line. */
 export const BELOW_BASELINE = 15.5;

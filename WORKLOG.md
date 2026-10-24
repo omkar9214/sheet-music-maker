@@ -601,3 +601,55 @@ Pane on 5194, his storage untouched (nothing stored; Esc cancelled the only entr
   errors in the buffer were from mid-edit hot reloads.
 
 **Open:** Whether "for now" has a time attached. Everything else in `NEXT.md`.
+
+---
+
+## 2026-10-24 — Claude — decision 10: a full sweep for bugs and use cases that don't make sense, proven with screenshots
+
+**Type:** decision
+**Files:** none — recorded before any code moved
+**Did:** Omkar, verbatim:
+
+> *"I need you to do a full sweep for bugs and any potential use case where it does not make sense, review your own work using screenshots and prove it"*
+
+**Inference, marked as inference:**
+- "Full sweep" means the whole app as it stands (decisions 2–9), not only the latest work. That is a
+  code read of every path, plus a browser walk of a new chart from nothing to print, plus the
+  harmony, part and sharing paths.
+- "Prove it" means every claim backed by a screenshot or a live-DOM measurement, and every defect
+  fixed with a test that fails without the fix. The findings are written down in
+  `docs/audit/2026-10-24-sweep.md`.
+- Testing happens on 5194. His charts there are backed up first and restored after.
+
+**Why:** His instruction.
+
+**Open:** None.
+
+---
+
+## 2026-10-24 — Claude — work: sweep (decision 10) — 13 defects fixed, findings in docs/audit
+
+**Type:** work
+**Files:** `docs/audit/2026-10-24-sweep.md` (new), `src/core/{song,rhythm}.ts`, `src/core/sweep.test.ts` (new),
+`src/ui/engrave/{layout,Notation,metrics}.ts(x)`, `src/ui/engrave/layout.test.ts`,
+`src/ui/{Inspector,TopBar,Sheet}.tsx`, `src/App.tsx`, `src/styles.css`, `.claude/launch.json`
+(+ `sheet-music-audit` on 5195), `NEXT.md`
+**Did:** Code read plus a browser walk. The table of defects, proofs and fixes is in
+`docs/audit/2026-10-24-sweep.md`. **Testing moved to 5195**: his "Bang Bang" on 5194 changed during
+the walk (2 → 6 sections) because he was using the tab, so the 5194 backup was **not restored**
+(that would have erased his work). Only my backup keys were removed there.
+
+**Verified:**
+
+```
+npm run check
+EXIT=0 — verify-repo 5 checks passed, 98 tests in 8 files, tsc -b clean
+```
+
+- Each new logic test proven by switching its fix off: meter 2 failed, section delete 2, notes via
+  grid 1, notes via chip 1.
+- Browser proofs are listed per finding in the audit file.
+
+**Open:**
+- Finding 13 is unproven in the browser (no chart long enough on 5195).
+- Undo history is still lost on reload.

@@ -12,6 +12,9 @@ Branch: `main`, no remote. §0 is written (decisions 2–3). The editor was rede
    was backed up before testing and restored after. His port is 5193, and agents must never clear
    5194's storage without checking it first.
 
+**Testing ports:** 5193 is his, and he also uses **5194** (found 2026-10-24). Agents test on **5195**
+(`sheet-music-audit`), whose storage is their own.
+
 ## Known gaps, in the order they will probably hurt
 
 2. **Spacing is not MuseScore's.** Systems are not spread to fill the page (MuseScore does that),
