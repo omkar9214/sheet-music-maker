@@ -1,4 +1,9 @@
 /**
+ * **Dormant since decision 9** (*"Remove the notes feature for now, It's getting complicated"*):
+ * nothing in the editor writes notes any more. The model, its drawing and its MusicXML export stay,
+ * so a chart that already holds notes still shows them, and the feature comes back by re-adding the
+ * palette and keys from commit 009af0b.
+ *
  * Written notes (decision 8): Omkar asked for musical notes, not text. A bar can hold notes instead of
  * slashes: a riff, the band's hits, a melody line.
  *

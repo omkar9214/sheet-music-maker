@@ -7,9 +7,8 @@ Branch: `main`, no remote. §0 is written (decisions 2–3). The editor was rede
 
 ## Now
 
-1. **Omkar tries decisions 7–8**: Charts ▾ → Copy link / Import / Chart file / ChordPro / MusicXML;
-   a key, meter or tempo change from the inspector; A / 1 / I and Part in the top bar; Notes at the
-   bottom left. Everything below waits on what he says. **Note:** on 2026-10-23 his chart "Bang Bang" was found on **5194**, the agents' port. It
+1. **Omkar tries decision 7**: Charts ▾ → Copy link / Import / Chart file / ChordPro / MusicXML;
+   a key, meter or tempo change from the inspector; A / 1 / I and Part in the top bar. Everything below waits on what he says. **Note:** on 2026-10-23 his chart "Bang Bang" was found on **5194**, the agents' port. It
    was backed up before testing and restored after. His port is 5193, and agents must never clear
    5194's storage without checking it first.
 
@@ -26,13 +25,9 @@ Branch: `main`, no remote. §0 is written (decisions 2–3). The editor was rede
 5. **There is no visible keyboard help.** The keys are listed in `App.tsx`'s header comment only.
    If he doesn't discover typing-to-enter, a one-line hint in the empty inspector may be warranted.
    §7.1 says labels only, so ask first.
-6. **Written notes, not yet done:**
-   - no click-to-place (keyboard and palette only)
-   - no triplets
-   - one voice
-   - stems of beamed groups are not angled
-   - a tie into the next bar is drawn to the barline only
-   - accidental stacking in dense chords is basic
+6. **Written notes are removed** (decision 9: "for now"). The dormant model is `core/notes.ts`, and
+   the UI is in commit `009af0b`. If they come back, the earlier gaps come with them: no
+   click-to-place, no triplets, one voice, flat beams, and cross-bar ties drawn only to the barline.
 7. **MusicXML was not opened in MuseScore.** It is checked for well-formedness and content by tests
    only. First real check: import it into MuseScore 4 and look.
 8. **Print was checked by applying the print stylesheet on screen** (3 pages at 816×1056 px, the

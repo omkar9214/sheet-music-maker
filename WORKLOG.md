@@ -548,3 +548,56 @@ EXIT=0 — verify-repo 5 checks passed, 89 tests in 7 files, tsc -b clean
 - The cross-bar tie is drawn only to the barline.
 - Real print dialog still unchecked.
 - `NEXT.md` items 6–10.
+
+---
+
+## 2026-10-24 — Claude — decision 9: remove the notes feature for now
+
+**Type:** decision
+**Files:** none — recorded before any code moved
+**Did:** Omkar, verbatim:
+
+> *"Remove the notes feature for now, It's getting complicated"*
+
+**Inference, marked as inference:**
+- "For now" means it may come back, so the removal is built to reverse (§9.7). What goes is
+  everything he sees and presses: the note palette at the bottom of the left sidebar, note input on
+  the keyboard, and the note cursor. The data model (`core/notes.ts`), its drawing and its MusicXML
+  export stay, dormant. A chart that already holds notes (from earlier testing, a file or a link)
+  still shows them rather than silently hiding his work (non-negotiable 4). Bringing the feature back
+  means re-adding the panel and the key handling, which are in git at `009af0b`.
+- "Complicated" is about the editor's surface, not the rest of decision 7. Sharing, key changes,
+  parts and number views stay.
+
+**Why:** His instruction.
+
+**Open:** Whether "for now" has a time attached.
+
+---
+
+## 2026-10-24 — Claude — work: note entry removed from the editor (decision 9)
+
+**Type:** work
+**Files:** `src/App.tsx`, `src/ui/Sheet.tsx`, `src/ui/FormPanel.tsx`, `src/styles.css`, `src/ui/NotesPanel.tsx`
+(deleted), `src/core/notes.ts` (marked dormant), `AGENTS.md` §0, `NEXT.md`,
+`skills/user-scenarios/chart-editor.md`
+**Did:** Removed everything he could see or press for written notes: the palette at the bottom of the
+left sidebar, the note-input keys, the note cursor, and their styles. Kept the notes model, its
+drawing and its MusicXML export, dormant, so a chart already holding notes still shows them (§9.7
+reversible; non-negotiable 4). They return from commit `009af0b`. A–G over a selected bar opens
+chord entry again, as before decision 8.
+
+**Verified:**
+
+```
+npm run check
+EXIT=0 — verify-repo 5 checks passed, 89 tests in 7 files, tsc -b clean
+```
+
+Pane on 5194, his storage untouched (nothing stored; Esc cancelled the only entry):
+- Selecting bar 1 shows no notes panel and no "Notes" button. The inspector reads "Bar 1 · Intro".
+- `e` opens the 4 beat cells holding "e".
+- After a reload, no console errors (marker logged after the reload, nothing following it). The
+  errors in the buffer were from mid-edit hot reloads.
+
+**Open:** Whether "for now" has a time attached. Everything else in `NEXT.md`.

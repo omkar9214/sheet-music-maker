@@ -41,8 +41,6 @@ interface Props {
   focus: string | null;
   entry: Entry | null;
   editingMeta: "title" | "source" | null;
-  /** Note input's cursor (decision 8): drawn as a bar at the tick where the next note goes. */
-  noteCursor: { barId: string; tick: number } | null;
   onPress: (barId: string, extend: boolean) => void;
   onOpen: (barId: string, zone: Zone) => void;
   cellsOf: (barId: string) => { cells: string[]; cellTicks: number };
@@ -336,20 +334,6 @@ export function Sheet(props: Props) {
               )}
             </g>
             <Notation page={p} title={song.title} source={song.source} />
-            {props.noteCursor &&
-              p.systems.flatMap((s) =>
-                s.bars
-                  .filter((b) => b.bar.id === props.noteCursor!.barId)
-                  .map((b) => {
-                    const x = b.xAt(props.noteCursor!.tick) - 0.4;
-                    return (
-                      <g key="cursor" className="edit-layer note-cursor">
-                        <rect x={b.x} y={s.y - 6} width={b.w} height={STAFF_H + 12} className="note-bar" />
-                        <rect x={x} y={s.y - 5} width={1.6} height={STAFF_H + 10} className="note-caret" />
-                      </g>
-                    );
-                  }),
-              )}
             <g className="edit-layer">
               {p.index === 0 && (
                 <>

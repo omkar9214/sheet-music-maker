@@ -1,38 +1,29 @@
 /**
  * The chart maker (AGENTS.md §0, decisions 2–3), editor redesigned in decision 5: the Form panel
  * holds the sections, the page is selected bar by bar like a spreadsheet, and the inspector acts on
- * the selection. Decisions 7–8 added sharing, key/meter/tempo changes, chord views, parts and
- * written notes. The keyboard does the transcribing:
+ * the selection. Decision 7 added sharing, key/meter/tempo changes, chord views and parts. Written
+ * notes (decision 8) were removed from the editor in decision 9. The keyboard does the
+ * transcribing:
  *
  *   ←/→ ↑/↓   move (⇧ extends)        A–G, %, N   start typing chords into the bar
  *   Enter     edit the bar's chords   Enter/Tab   in the boxes: store, next bar (⇧: previous)
  *   ⌫         clear chords            ⌘C / ⌘V     copy / paste bars
  *   Esc       deselect                ⌘Z / ⇧⌘Z    undo / redo
- *
- * Writing notes (the Notes palette, bottom left):
- *   1–5 length · A–G note (⇧ adds to the chord) · ↑/↓ semitone · ⌘↑/⌘↓ octave · 0 rest · . dot ·
- *   T tie · ⌫ take back · ←/→ move · Esc done
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { barText, chordCells, type ChordView } from "./core/chord";
 import { barContexts, type BarContext } from "./core/context";
-import {
-  nearestOctave, pitchOf, restBar, runBefore, shiftSemitone, signatureAcc, stepOf, updateRun, withStarts,
-  writeAt, writtenOf, type NoteRun, type Written,
-} from "./core/notes";
 import { concertKey, partSong, type Part } from "./core/part";
 import { barRhythm, gridOfRhythm, textFromGrid } from "./core/rhythm";
 import {
   addSection, allBars, barPatternId, barRange, clearChords, copyBars, deleteBars, deletePattern,
   deleteSection, duplicateSection, findBar, insertBar, moveSection, pasteBars, patternById,
-  saveRhythmAsPattern, setBarCells, setBarCount, setBarNotes, setBarsPattern, setBarsRhythm,
+  saveRhythmAsPattern, setBarCells, setBarCount, setBarsPattern, setBarsRhythm,
   setKeyChange, setKeyKeepChords, setPatterns, setRepeat, setTempoChange, setTime, setTimeChange,
   setTimeForBars, toggleEnding, transpose, updateBar, updateSection, type Bar, type BarClip, type Song,
 } from "./core/song";
-import { barTicks } from "./core/ticks";
 import { FormPanel, type FormActions } from "./ui/FormPanel";
 import { Inspector, type InspectorActions } from "./ui/Inspector";
-import { NotesPanel, valueTicks, type NoteInputState, type NotesActions } from "./ui/NotesPanel";
 import { Sheet, type Entry, type Zone } from "./ui/Sheet";
 import { TopBar } from "./ui/TopBar";
 import { layoutSong, type PageLayout } from "./ui/engrave/layout";
@@ -82,7 +73,6 @@ export function App() {
   const [entry, setEntry] = useState<Entry | null>(null);
   const [meta, setMeta] = useState<"title" | "source" | null>(null);
   const [focusCue, setFocusCue] = useState<{ which: "above" | "below"; n: number } | null>(null);
-  const [noteIn, setNoteIn] = useState<NoteInputState | null>(null);
   const [{ view, part }, setViewState] = useState(loadView);
   const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
   const clipboard = useRef<BarClip[]>([]);
@@ -110,13 +100,13 @@ export function App() {
   const pages = useMemo(() => (fonts ? layoutSong(viewSong, measureText, view) : []), [viewSong, fonts, view]);
   const ids = useMemo(() => (sel ? barRange(song, sel.anchor, sel.focus) : []), [song, sel]);
   const selected = useMemo(() => new Set(ids), [ids]);
+  const flatIds = useMemo(() => allBars(song).map((x) => x.bar.id), [song]);
 
   // A selection that no longer exists (undo, delete, another chart) is dropped, not kept dangling.
   useEffect(() => {
     if (sel && (!findBar(song, sel.anchor) || !findBar(song, sel.focus))) setSel(null);
     if (entry && !findBar(song, entry.barId)) setEntry(null);
-    if (noteIn && !findBar(song, noteIn.barId)) setNoteIn(null);
-  }, [song, sel, entry, noteIn]);
+  }, [song, sel, entry]);
   useEffect(() => {
     document.title = song.title ? `${song.title} — Sheet Music Maker` : "Sheet Music Maker";
   }, [song.title]);
@@ -234,153 +224,8 @@ export function App() {
 
   const onOpen = (id: string, zone: Zone) => {
     select(id);
-    setNoteIn(null);
     if (zone === "chord") setEntry({ barId: id });
     else setFocusCue({ which: zone, n: Date.now() });
-  };
-
-  /* ---------------------------------------------------------------- written notes (decision 8) */
-
-  const flatIds = useMemo(() => allBars(song).map((x) => x.bar.id), [song]);
-  const runsOf = (id: string): NoteRun[] => barOf(song, id)?.notes ?? restBar(ctxOf(id).time);
-
-  /** The note before the cursor, here or at the end of the bar before: what ↑ ↓ ⌫ T ♯ act on. */
-  const lastNote = (): { barId: string; run: number } | null => {
-    if (!noteIn) return null;
-    const here = runBefore(runsOf(noteIn.barId), noteIn.cursor);
-    if (here >= 0) return { barId: noteIn.barId, run: here };
-    const prev = flatIds[flatIds.indexOf(noteIn.barId) - 1];
-    const prevBar = prev ? barOf(song, prev) : undefined;
-    if (prev && prevBar?.notes) {
-      const i = runBefore(prevBar.notes, Infinity);
-      if (i >= 0) return { barId: prev, run: i };
-    }
-    return null;
-  };
-
-  /** Moves the cursor on, into the next bar at the barline. */
-  const advance = (id: string, next: number) => {
-    const total = barTicks(ctxOf(id).time);
-    const nextBar = flatIds[flatIds.indexOf(id) + 1];
-    if (next >= total && nextBar) {
-      setNoteIn((n) => (n ? { ...n, barId: nextBar, cursor: 0 } : n));
-      select(nextBar);
-    } else {
-      setNoteIn((n) => (n ? { ...n, cursor: Math.min(next, total) } : n));
-    }
-  };
-
-  const write = (pitches: NoteRun["pitches"] | null) => {
-    if (!noteIn) return;
-    const id = noteIn.barId;
-    const c = ctxOf(id);
-    if (noteIn.cursor >= barTicks(c.time)) return;
-    const r = writeAt(barOf(song, id)?.notes, c.time, noteIn.cursor, valueTicks(noteIn.value, noteIn.dotted), pitches);
-    edit((s) => setBarNotes(s, id, r.runs));
-    advance(id, r.next);
-  };
-
-  const editLast = (f: (w: Written, c: BarContext) => Written | null, all = false) => {
-    const last = lastNote();
-    if (!last) return;
-    const c = ctxOf(last.barId);
-    const runs = runsOf(last.barId);
-    const run = runs[last.run]!;
-    const pitches = run.pitches.map((p, i) => {
-      if (!all && i !== run.pitches.length - 1) return p;
-      const w = f(writtenOf(p, c), c);
-      return w ? pitchOf(w, c) : p;
-    });
-    edit((s) => setBarNotes(s, last.barId, updateRun(runs, last.run, { pitches })));
-  };
-
-  const letter = (l: number, addToChord: boolean) => {
-    if (!noteIn) return;
-    const c = ctxOf(noteIn.barId);
-    if (addToChord) {
-      const last = lastNote();
-      if (!last) return;
-      const lc = ctxOf(last.barId);
-      const runs = runsOf(last.barId);
-      const run = runs[last.run]!;
-      const top = run.pitches.map((p) => writtenOf(p, lc)).reduce((a, b) => (stepOf(b) > stepOf(a) ? b : a));
-      let octave = top.octave;
-      if (octave * 7 + l <= stepOf(top)) octave++;
-      const p = pitchOf({ letter: l, acc: signatureAcc(l, lc.key), octave }, lc);
-      edit((s) => setBarNotes(s, last.barId, updateRun(runs, last.run, { pitches: [...run.pitches, p] })));
-      return;
-    }
-    // Nearest the note before; the first note of all goes nearest the staff's middle line.
-    const last = lastNote();
-    const lc = last ? ctxOf(last.barId) : c;
-    const prevRun = last ? runsOf(last.barId)[last.run] : undefined;
-    const near: Written = prevRun
-      ? writtenOf(prevRun.pitches[prevRun.pitches.length - 1]!, lc)
-      : song.clef === "bass"
-        ? { letter: 1, acc: 0, octave: 3 }
-        : { letter: 6, acc: 0, octave: 4 };
-    const octave = nearestOctave(l, near);
-    write([pitchOf({ letter: l, acc: signatureAcc(l, c.key), octave }, c)]);
-  };
-
-  const moveCursor = (dir: 1 | -1) => {
-    if (!noteIn) return;
-    const starts = withStarts(runsOf(noteIn.barId)).map((r) => r.start);
-    const total = barTicks(ctxOf(noteIn.barId).time);
-    const i = flatIds.indexOf(noteIn.barId);
-    if (dir > 0) {
-      const next = starts.find((t) => t > noteIn.cursor);
-      if (next !== undefined) setNoteIn({ ...noteIn, cursor: next });
-      else if (flatIds[i + 1]) {
-        setNoteIn({ ...noteIn, barId: flatIds[i + 1]!, cursor: 0 });
-        select(flatIds[i + 1]!);
-      } else setNoteIn({ ...noteIn, cursor: total });
-    } else {
-      const prev = [...starts].reverse().find((t) => t < noteIn.cursor);
-      if (prev !== undefined) setNoteIn({ ...noteIn, cursor: prev });
-      else if (flatIds[i - 1]) {
-        const pid = flatIds[i - 1]!;
-        const ps = withStarts(runsOf(pid)).map((r) => r.start);
-        setNoteIn({ ...noteIn, barId: pid, cursor: ps[ps.length - 1] ?? 0 });
-        select(pid);
-      }
-    }
-  };
-
-  const notesActions: NotesActions = {
-    setMode: (on) => {
-      const id = noteIn?.barId ?? sel?.focus;
-      if (!id) return;
-      if (on) {
-        if (!barOf(song, id)?.notes) edit((s) => setBarNotes(s, id, restBar(ctxOf(id).time)));
-        setNoteIn({ barId: id, cursor: 0, value: noteIn?.value ?? 3, dotted: false });
-        setEntry(null);
-      } else {
-        edit((s) => setBarNotes(s, id, null));
-        setNoteIn(null);
-      }
-    },
-    setValue: (v) => setNoteIn((n) => (n ? { ...n, value: v, dotted: v === 5 ? false : n.dotted } : n)),
-    toggleDot: () => setNoteIn((n) => (n && n.value !== 5 ? { ...n, dotted: !n.dotted } : n)),
-    rest: () => write(null),
-    tie: () => {
-      const last = lastNote();
-      if (!last) return;
-      const runs = runsOf(last.barId);
-      edit((s) => setBarNotes(s, last.barId, updateRun(runs, last.run, { tie: !runs[last.run]!.tie })));
-    },
-    accidental: (acc) => editLast((w) => ({ ...w, acc })),
-    octave: (dir) => editLast((w) => ({ ...w, octave: w.octave + dir }), true),
-    undoNote: () => {
-      const last = lastNote();
-      if (!last) return;
-      const runs = runsOf(last.barId);
-      const start = withStarts(runs)[last.run]!.start;
-      edit((s) => setBarNotes(s, last.barId, updateRun(runs, last.run, { rest: true })));
-      setNoteIn((n) => (n ? { ...n, barId: last.barId, cursor: start } : n));
-      select(last.barId);
-    },
-    stop: () => setNoteIn(null),
   };
 
   /* ---------------------------------------------------------------------------------- keyboard */
@@ -400,27 +245,6 @@ export function App() {
       if (mod && k.toLowerCase() === "y") {
         ev.preventDefault();
         store.redo();
-        return;
-      }
-      // Note input owns the keyboard while it is on (decision 8).
-      if (noteIn) {
-        const handled = (() => {
-          if (mod && (k === "ArrowUp" || k === "ArrowDown")) return notesActions.octave(k === "ArrowUp" ? 1 : -1), true;
-          if (mod) return false;
-          if (/^[1-5]$/.test(k)) return notesActions.setValue(Number(k) as NoteInputState["value"]), true;
-          if (k === ".") return notesActions.toggleDot(), true;
-          if (k === "0" || k.toLowerCase() === "r") return notesActions.rest(), true;
-          if (k.toLowerCase() === "t") return notesActions.tie(), true;
-          if (/^[a-g]$/i.test(k)) return letter("cdefgab".indexOf(k.toLowerCase()), ev.shiftKey), true;
-          if (k === "ArrowUp" || k === "ArrowDown") {
-            return editLast((w, c) => shiftSemitone(w, k === "ArrowUp" ? 1 : -1, c.key)), true;
-          }
-          if (k === "ArrowRight" || k === "ArrowLeft") return moveCursor(k === "ArrowRight" ? 1 : -1), true;
-          if (k === "Backspace" || k === "Delete") return notesActions.undoNote(), true;
-          if (k === "Escape") return setNoteIn(null), true;
-          return false;
-        })();
-        if (handled) ev.preventDefault();
         return;
       }
       if (!sel) {
@@ -545,8 +369,6 @@ export function App() {
     },
   };
 
-  const panelBar = noteIn?.barId ?? (ids.length === 1 ? ids[0]! : null);
-
   return (
     <div className="app">
       <TopBar
@@ -570,23 +392,13 @@ export function App() {
         }
       />
       <div className="workspace">
-        <FormPanel
-          song={song}
-          active={activeSection}
-          a={form}
-          bottom={
-            panelBar ? (
-              <NotesPanel isNotes={!!barOf(song, panelBar)?.notes} input={noteIn} a={notesActions} />
-            ) : undefined
-          }
-        />
+        <FormPanel song={song} active={activeSection} a={form} />
         <main
           className="scroller"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               setSel(null);
               setEntry(null);
-              setNoteIn(null);
             }
           }}
         >
@@ -599,14 +411,8 @@ export function App() {
               focus={sel?.focus ?? null}
               entry={entry}
               editingMeta={meta}
-              noteCursor={noteIn ? { barId: noteIn.barId, tick: noteIn.cursor } : null}
               onPress={(id, extend) => {
                 setEntry(null);
-                if (noteIn && !extend) {
-                  setNoteIn({ ...noteIn, barId: id, cursor: 0 });
-                  select(id);
-                  return;
-                }
                 setSel((cur) => (extend && cur ? { anchor: cur.anchor, focus: id } : { anchor: id, focus: id }));
               }}
               onOpen={onOpen}

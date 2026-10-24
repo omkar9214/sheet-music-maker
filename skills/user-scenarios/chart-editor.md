@@ -57,7 +57,10 @@ who receives a chart and may only have a phone. **The horn player**, who reads a
   key. [built]
 - **Guitarist · capo 2** → Part: Capo 2. The shapes are shown down 2 semitones. [built]
 
-### Written notes (decision 8)
+### Written notes (decision 8) — removed from the editor in decision 9
+
+Omkar, decision 9: *"Remove the notes feature for now, It's getting complicated"*. The rows below
+describe what was built and taken out. A chart that already holds notes still shows them.
 - **Arranger · writes a riff in bar 9** → select bar 9 → Notes (left sidebar, bottom) → the bar
   becomes a whole rest with a cursor. Press a digit for the length (1 whole, 2 half, 3 quarter, 4
   8th, 5 16th), then a letter A–G. The note lands at the cursor, which moves on. [built]
