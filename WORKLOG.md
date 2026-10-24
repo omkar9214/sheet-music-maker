@@ -708,3 +708,27 @@ EXIT=0 — verify-repo passed, 103 tests in 8 files, tsc -b clean
   Bang"**, and reloaded it. Nothing was written there. Every later call named 5195's tab.
 
 **Open:** A short last line (the 2 of 4 + 4 + 2) is stretched to full width, as before. Not ruled.
+
+---
+
+## 2026-10-24 — Claude — decision 12: publish it on his GitHub so he can use it online
+
+**Type:** decision
+**Files:** none — recorded before any code moved
+**Did:** Omkar, verbatim:
+
+> *"Publish it on my github so I can use it online"*
+
+**Inference, marked as inference:**
+- "Use it online" means a hosted site, not only the source on GitHub. GitHub Pages fits §6: it is
+  static, there is no backend, and saving stays in the browser's localStorage, per origin. So charts
+  on 5193/5194 do **not** appear online; moving them is the chart file or the share link.
+- This is his "ask" for pushing (CLAUDE.md: "Commit, never push unless he asks"). It covers creating
+  the repo and pushing `main`, and nothing beyond that.
+- Account `omkar9214` (the logged-in `gh`). Repo name and visibility were asked, not assumed.
+
+**Why:** His instruction.
+
+**Open:** None. Asked in the same session, which visibility ("Public, PDF removed" recommended).
+He chose **"Public, everything"**: the repo is `omkar9214/sheet-music-maker`, public, with the
+reference PDF and every doc. The name was the recommended default, and he did not change it.
