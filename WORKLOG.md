@@ -653,3 +653,58 @@ EXIT=0 — verify-repo 5 checks passed, 98 tests in 8 files, tsc -b clean
 **Open:**
 - Finding 13 is unproven in the browser (no chart long enough on 5195).
 - Undo history is still lost on reload.
+
+---
+
+## 2026-10-24 — Claude — decision 11: at most 4 bars in a line
+
+**Type:** decision
+**Files:** none — recorded before any code moved
+**Did:** Omkar, verbatim:
+
+> *"In a single line there are at a time 12 bars can be there which is nuts, how tf you overlooked it?"*
+>
+> *"4 bars max"*
+
+**Reproduction:** `layoutSong` breaks lines greedily by width only (`src/ui/engrave/layout.ts`). A
+bar's minimum width is its content, so narrow bars (a whole-note or empty bar) pack until the line
+is full: 12 fit on one system. Nothing capped the count, and the sweep (decision 10) walked charts
+whose bars were all strum patterns, which already break 4 per line by width.
+
+**Inference, marked as inference:**
+- The cap is per system everywhere (screen, print, every section). Width still breaks earlier when
+  four bars do not fit; a line is never forced to four.
+- A section still always starts a new line, so a 6-bar section is 4 + 2.
+
+**Why:** His instruction.
+
+**Open:** Whether a short last line (the "2" of 4 + 2) should be stretched to full width, as now, or
+drawn at four-bar spacing. Not asked; unchanged.
+
+---
+
+## 2026-10-24 — Claude — work: at most 4 bars per system (decision 11)
+
+**Type:** work
+**Files:** `src/ui/engrave/layout.ts` (`MAX_BARS_PER_SYSTEM`), `src/ui/engrave/layout.test.ts`, `docs/audit/2026-10-24-sweep.md`
+**Did:** Line breaking was width-only. Measured before the fix, a 16-bar section broke **Slashes 14 + 2**
+and **Beats 6 + 7 + 3** (strum and choke 4 × 4 by width). Slashes is the default pattern of every
+added section, so a new chart hit it at once. The sweep missed it because every chart it walked
+was strum. Even his reference chart had a line over four (the new test fails on `khwabon()` without
+the cap). Now a line also breaks at four bars. Width can still break it earlier.
+
+**Verified:**
+
+```
+npm run check
+EXIT=0 — verify-repo passed, 103 tests in 8 files, tsc -b clean
+```
+
+- With the cap line commented out, 3 of the new tests fail (Slashes, Beats, his chart).
+- Browser, 5195: a 16-bar Slashes section and a 10-bar Beats section were added to the stored
+  chart. Live DOM, `g[data-bar]` grouped by line: 99 bars, max 4 per line. Screenshot: Jam is
+  4/4/4/4 and Jam Beats is 4/4/2. Probe sections were removed afterwards.
+- A `javascript_tool` call without a `tabId` ran on the fronted tab, which was **his 5194 "Bang
+  Bang"**, and reloaded it. Nothing was written there. Every later call named 5195's tab.
+
+**Open:** A short last line (the 2 of 4 + 4 + 2) is stretched to full width, as before. Not ruled.

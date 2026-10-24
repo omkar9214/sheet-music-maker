@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { khwabon } from "../../core/khwabon";
 import { KEYS } from "../../core/pitch";
-import { allBars, transpose, updateBar } from "../../core/song";
-import { layoutSong, type Measure } from "./layout";
+import { builtinPatterns, starterPatterns } from "../../core/rhythm";
+import { allBars, emptyBar, emptySong, transpose, updateBar } from "../../core/song";
+import { layoutSong, MAX_BARS_PER_SYSTEM, type Measure } from "./layout";
 import { MARGIN_BOTTOM, MARGIN_X, CONTENT_W, PAGE_H, SIZE } from "./metrics";
 
 /** Edwin is about 0.47 em per character in a chord symbol. That is close enough to test geometry,
@@ -99,5 +100,22 @@ describe("layout of his chart (AGENTS.md §9.10: the real path)", () => {
     expect(layoutSong(c, real)[0]!.systems[0]!.tempoRaise).toBeGreaterThan(0);
     // In 6/8 the tempo's beat is the dotted quarter.
     expect(layoutSong({ ...song, time: { beats: 6, unit: 8 } }, real)[0]!.systems[0]!.tempoDotted).toBe(true);
+  });
+});
+
+describe("bars per system (decision 11: \"4 bars max\")", () => {
+  // Before the cap, a 16-bar section broke Slashes 14 + 2 and Beats 6 + 7 + 3.
+  for (const p of [...builtinPatterns(), ...starterPatterns()]) {
+    it(`breaks 16 ${p.name} bars 4 + 4 + 4 + 4`, () => {
+      const s = emptySong();
+      s.sections[0] = { ...s.sections[0]!, pattern: p.id, bars: Array.from({ length: 16 }, emptyBar) };
+      const counts = layoutSong(s, measure).flatMap((pg) => pg.systems).map((x) => x.bars.length);
+      expect(counts).toEqual([4, 4, 4, 4]);
+    });
+  }
+
+  it("never puts more than four on a line in his chart", () => {
+    const counts = layoutSong(khwabon(), measure).flatMap((pg) => pg.systems).map((x) => x.bars.length);
+    expect(Math.max(...counts)).toBe(MAX_BARS_PER_SYSTEM);
   });
 });

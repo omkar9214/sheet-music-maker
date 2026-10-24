@@ -121,6 +121,13 @@ export function eventSpace(ticks: number): number {
   return SP * (1.1 + 1.9 * Math.sqrt(ticks / PPQ));
 }
 
+/**
+ * Decision 11, Omkar: "4 bars max" in a line. Width alone let Slashes bars (the default for a new
+ * section) pack 14 to a system and Beats 7. Width can still break a line sooner; it is never
+ * padded out to four.
+ */
+export const MAX_BARS_PER_SYSTEM = 4;
+
 const REPEAT_W = LINE.thick + LINE.barlineSep + LINE.thin + LINE.barlineSep + 0.42 * SP;
 
 export function headerWidth(clef: Clef, fifthsCount: number, time?: TimeSig): number {
@@ -320,6 +327,7 @@ export function layoutSong(song: Song, measure: Measure, view: ChordView = "lett
       // The first bar's change is in the header, so its inline room is not needed.
       const w = minWidth(prepared[i]!) - (line.length === 0 ? startW : 0);
       if (line.length > 0 && used + w > avail) break;
+      if (line.length === MAX_BARS_PER_SYSTEM) break;
       line.push(prepared[i]!);
       used += w;
       i++;
