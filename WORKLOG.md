@@ -927,3 +927,19 @@ EXIT=0 — 108 tests in 9 files
 
 **Open:** Not pushed. The boxed cue in his screenshot sits above bar 1's content, not at the margin.
 That is unchanged, because it belongs to the bar, not to the line.
+
+---
+
+## 2026-10-24 — Claude — decision 17: push decision 16 live
+
+**Type:** decision
+**Files:** none
+**Did:** Omkar, verbatim:
+
+> *"Push to GitHub so the live site updates."*
+
+**Inference, marked as inference:** This covers this push only.
+
+**Why:** His instruction.
+
+**Open:** None.
