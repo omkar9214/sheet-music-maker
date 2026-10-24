@@ -850,3 +850,20 @@ EXIT=0 — 107 tests in 9 files
   "Beat 1", so ⌘Z goes to the empty input and does nothing. You need Esc first. In `NEXT.md`.
 - "size bars" read as side bars: not confirmed.
 - Not pushed, so the live site does not have this yet.
+
+---
+
+## 2026-10-24 — Claude — decision 15: push so the live site updates
+
+**Type:** decision
+**Files:** none
+**Did:** Omkar, verbatim:
+
+> *"Push to GitHub so the live site updates."*
+
+**Inference, marked as inference:** This covers this push only (decisions 13–14 and their work).
+Later pushes still need him to ask.
+
+**Why:** His instruction.
+
+**Open:** None.
